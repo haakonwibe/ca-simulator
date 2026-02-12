@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Privacy Policy — CA Simulator</title>
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body { background: #0a0e1a; color: #e2e8f0; font-family: system-ui, -apple-system, sans-serif; line-height: 1.7; padding: 2rem 1.5rem; }
+    .container { max-width: 640px; margin: 0 auto; }
+    a { color: #3b82f6; text-decoration: none; }
+    a:hover { text-decoration: underline; }
+    .back { display: inline-block; margin-bottom: 2rem; font-size: 0.875rem; color: #64748b; }
+    .back:hover { color: #3b82f6; }
+    h1 { font-size: 1.5rem; font-weight: 700; margin-bottom: 0.25rem; }
+    .updated { font-size: 0.8125rem; color: #64748b; margin-bottom: 2rem; }
+    h2 { font-size: 1.05rem; font-weight: 600; margin-top: 2rem; margin-bottom: 0.5rem; }
+    p { margin-bottom: 1rem; font-size: 0.9375rem; }
+    ul { list-style: none; padding-left: 0; margin-bottom: 1rem; }
+    ul li { font-size: 0.9375rem; padding-left: 1.25rem; position: relative; margin-bottom: 0.35rem; }
+    ul li::before { content: "\2022"; position: absolute; left: 0; color: #64748b; }
+    code { font-size: 0.8125rem; padding: 0.125rem 0.375rem; border-radius: 4px; background: rgba(59,130,246,0.1); color: #3b82f6; }
+    .footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #1e293b; font-size: 0.8125rem; color: #64748b; }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <a href="/" class="back">&larr; Back to CA Simulator</a>
+
+    <h1>Privacy Policy</h1>
+    <p class="updated">Last updated: February 2026</p>
+
+    <h2>Summary</h2>
+    <p>CA Simulator does not collect, store, or transmit any of your data. Period.</p>
+
+    <h2>How It Works</h2>
+    <p>CA Simulator runs entirely in your browser. When you connect to your tenant, your browser authenticates directly with Microsoft Entra ID using MSAL.js and retrieves data directly from Microsoft Graph API. No data passes through our servers.</p>
+
+    <h2>What We Don't Do</h2>
+    <ul>
+      <li>We do not store your Conditional Access policies</li>
+      <li>We do not store user information, group memberships, or role assignments</li>
+      <li>We do not log your simulation scenarios or results</li>
+      <li>We do not use cookies for tracking</li>
+      <li>We do not share any data with third parties</li>
+    </ul>
+
+    <h2>Authentication</h2>
+    <p>Authentication is handled entirely by Microsoft's identity platform (MSAL.js with PKCE). Tokens are stored in your browser's sessionStorage and are cleared when you close the tab. We never see or store your credentials or tokens.</p>
+
+    <h2>Permissions</h2>
+    <p>The app requests read-only delegated permissions:</p>
+    <ul>
+      <li><code>Policy.Read.All</code> — Read Conditional Access policies</li>
+      <li><code>Application.Read.All</code> — Resolve application names</li>
+      <li><code>Directory.Read.All</code> — Resolve users, groups, and roles</li>
+      <li><code>User.Read.All</code> — User search for simulation</li>
+      <li><code>GroupMember.Read.All</code> — Group membership resolution</li>
+    </ul>
+    <p>These are delegated permissions, meaning they operate within the signed-in user's own access level. The app cannot access anything the user cannot already access themselves.</p>
+
+    <h2>Analytics</h2>
+    <p>We use Vercel Web Analytics, which collects anonymous page view data (page URL, referrer, country) with no cookies and no personal data. See <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Vercel's privacy policy</a>.</p>
+
+    <h2>Sample Mode</h2>
+    <p>Sample mode uses hardcoded demo data. No authentication or API calls are made. No data leaves your browser.</p>
+
+    <h2>Contact</h2>
+    <p>Questions? Reach out on X: <a href="https://x.com/haakonwibe" target="_blank" rel="noopener noreferrer">@haakonwibe</a></p>
+
+    <div class="footer">
+      Built by Haakon Wibe &middot; Not affiliated with Microsoft
+    </div>
+  </div>
+</body>
+</html>
