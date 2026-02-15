@@ -471,7 +471,10 @@ describe('PolicyEvaluator', () => {
   // Grant controls with authentication strength
   // ──────────────────────────────────────────────
   describe('authentication strength', () => {
-    it('includes authenticationStrength displayName in result', () => {
+    const PHISHING_RESISTANT_ID = '00000000-0000-0000-0000-000000000004';
+    const MFA_ID = '00000000-0000-0000-0000-000000000002';
+
+    it('returns structured authenticationStrength with displayName', () => {
       const policy = createPolicy({
         grantControls: {
           operator: 'AND',
@@ -481,10 +484,14 @@ describe('PolicyEvaluator', () => {
       });
       const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
 
-      expect(result.grantControls?.authenticationStrength).toBe('Phishing-resistant MFA');
+      expect(result.grantControls?.authenticationStrength).toEqual({
+        displayName: 'Phishing-resistant MFA',
+        policyStrengthId: 'str-001',
+        satisfied: false,
+      });
     });
 
-    it('falls back to authenticationStrength id when displayName missing', () => {
+    it('falls back to id when displayName is missing', () => {
       const policy = createPolicy({
         grantControls: {
           operator: 'AND',
@@ -494,7 +501,71 @@ describe('PolicyEvaluator', () => {
       });
       const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
 
-      expect(result.grantControls?.authenticationStrength).toBe('str-001');
+      expect(result.grantControls?.authenticationStrength?.displayName).toBe('str-001');
+    });
+
+    it('satisfied when user level meets requirement', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'OR',
+          builtInControls: [],
+          authenticationStrength: { id: PHISHING_RESISTANT_ID, displayName: 'Phishing-resistant MFA' },
+        },
+      });
+      const ctx = createTestContext({ authenticationStrengthLevel: 3 });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.authenticationStrength?.satisfied).toBe(true);
+      expect(result.grantControls?.satisfied).toBe(true);
+    });
+
+    it('unsatisfied when user level is below requirement', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'OR',
+          builtInControls: [],
+          authenticationStrength: { id: PHISHING_RESISTANT_ID, displayName: 'Phishing-resistant MFA' },
+        },
+      });
+      const ctx = createTestContext({ authenticationStrengthLevel: 1 });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.authenticationStrength?.satisfied).toBe(false);
+      expect(result.grantControls?.satisfied).toBe(false);
+    });
+
+    it('AND policy: mfa + authStrength both satisfied', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'AND',
+          builtInControls: ['mfa'],
+          authenticationStrength: { id: MFA_ID, displayName: 'Multifactor authentication' },
+        },
+      });
+      const ctx = createTestContext({
+        authenticationStrengthLevel: 1,
+        satisfiedControls: ['mfa'],
+      });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.satisfied).toBe(true);
+    });
+
+    it('OR policy: authStrength satisfied overrides unsatisfied builtIn', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'OR',
+          builtInControls: ['mfa'],
+          authenticationStrength: { id: MFA_ID, displayName: 'Multifactor authentication' },
+        },
+      });
+      const ctx = createTestContext({
+        authenticationStrengthLevel: 1,
+        satisfiedControls: [],
+      });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.satisfied).toBe(true);
     });
   });
 

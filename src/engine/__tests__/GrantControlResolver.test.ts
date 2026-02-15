@@ -276,60 +276,107 @@ describe('GrantControlResolver', () => {
   });
 
   // ──────────────────────────────────────────────
-  // Authentication strength
+  // Authentication strength hierarchy
   // ──────────────────────────────────────────────
-  describe('authentication strength', () => {
-    it('unsatisfied authenticationStrength → controlsRequired', () => {
-      const policy = appliedPolicy('auth-str-1', 'Require Phishing-Resistant', {
-        operator: 'AND',
-        controls: ['mfa'],
+  describe('authentication strength hierarchy', () => {
+    const MFA_ID = '00000000-0000-0000-0000-000000000002';
+    const PASSWORDLESS_ID = '00000000-0000-0000-0000-000000000003';
+    const PHISHING_RESISTANT_ID = '00000000-0000-0000-0000-000000000004';
+    const CUSTOM_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
+
+    function authStrengthPolicy(
+      id: string,
+      name: string,
+      operator: 'AND' | 'OR',
+      builtInControls: string[],
+      strengthId: string,
+      strengthName: string,
+    ): PolicyEvaluationResult {
+      return appliedPolicy(id, name, {
+        operator,
+        controls: builtInControls,
         satisfied: false,
         satisfiedControls: [],
-        unsatisfiedControls: ['mfa'],
-        authenticationStrength: 'Phishing-resistant MFA',
+        unsatisfiedControls: builtInControls,
+        authenticationStrength: {
+          displayName: strengthName,
+          policyStrengthId: strengthId,
+          satisfied: false, // resolver re-derives this
+        },
       });
+    }
 
-      const result = resolver.resolve([policy], ['mfa']);
+    it('MFA policy + MFA user (level 1) → satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require MFA Strength', 'OR', [], MFA_ID, 'Multifactor authentication');
+      const result = resolver.resolve([policy], [], 1);
+      expect(result.decision).toBe('allow');
+    });
 
-      // MFA is satisfied but authenticationStrength is not
+    it('MFA policy + Passwordless user (level 2) → satisfied (higher satisfies lower)', () => {
+      const policy = authStrengthPolicy('as-1', 'Require MFA Strength', 'OR', [], MFA_ID, 'Multifactor authentication');
+      const result = resolver.resolve([policy], [], 2);
+      expect(result.decision).toBe('allow');
+    });
+
+    it('Phishing-resistant policy + MFA user (level 1) → NOT satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require Phishing-Resistant', 'OR', [], PHISHING_RESISTANT_ID, 'Phishing-resistant MFA');
+      const result = resolver.resolve([policy], [], 1);
       expect(result.decision).toBe('controlsRequired');
       expect(result.unsatisfiedControls).toContain('authenticationStrength:Phishing-resistant MFA');
     });
 
-    it('satisfied via generic authenticationStrength control', () => {
-      const policy = appliedPolicy('auth-str-1', 'Require Phishing-Resistant', {
-        operator: 'AND',
-        controls: ['mfa'],
-        satisfied: false,
-        satisfiedControls: [],
-        unsatisfiedControls: ['mfa'],
-        authenticationStrength: 'Phishing-resistant MFA',
-      });
-
-      // 'authenticationStrength' as a generic satisfied control
-      const result = resolver.resolve(
-        [policy],
-        ['mfa', 'authenticationStrength' as SatisfiedControl],
-      );
-
+    it('Phishing-resistant policy + Phishing-resistant user (level 3) → satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require Phishing-Resistant', 'OR', [], PHISHING_RESISTANT_ID, 'Phishing-resistant MFA');
+      const result = resolver.resolve([policy], [], 3);
       expect(result.decision).toBe('allow');
     });
 
-    it('satisfied via specific strength ID', () => {
-      const policy = appliedPolicy('auth-str-1', 'Require Phishing-Resistant', {
-        operator: 'AND',
-        controls: [],
-        satisfied: false,
-        satisfiedControls: [],
-        unsatisfiedControls: [],
-        authenticationStrength: 'Phishing-resistant MFA',
-      });
+    it('Passwordless policy + MFA user (level 1) → NOT satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require Passwordless', 'OR', [], PASSWORDLESS_ID, 'Passwordless MFA');
+      const result = resolver.resolve([policy], [], 1);
+      expect(result.decision).toBe('controlsRequired');
+    });
 
-      const result = resolver.resolve(
-        [policy],
-        ['authenticationStrength:Phishing-resistant MFA' as SatisfiedControl],
-      );
+    it('Passwordless policy + Passwordless user (level 2) → satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require Passwordless', 'OR', [], PASSWORDLESS_ID, 'Passwordless MFA');
+      const result = resolver.resolve([policy], [], 2);
+      expect(result.decision).toBe('allow');
+    });
 
+    it('Passwordless policy + Phishing-resistant user (level 3) → satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Require Passwordless', 'OR', [], PASSWORDLESS_ID, 'Passwordless MFA');
+      const result = resolver.resolve([policy], [], 3);
+      expect(result.decision).toBe('allow');
+    });
+
+    it('unknown/custom strength ID + any user → NOT satisfied', () => {
+      const policy = authStrengthPolicy('as-1', 'Custom Strength', 'OR', [], CUSTOM_ID, 'My Custom Strength');
+      const result = resolver.resolve([policy], [], 3);
+      expect(result.decision).toBe('controlsRequired');
+    });
+
+    it('AND: mfa + authStrength, user has mfa but insufficient level → controlsRequired', () => {
+      const policy = authStrengthPolicy('as-1', 'MFA + Phishing-Resistant', 'AND', ['mfa'], PHISHING_RESISTANT_ID, 'Phishing-resistant MFA');
+      const result = resolver.resolve([policy], ['mfa'], 1);
+      expect(result.decision).toBe('controlsRequired');
+      expect(result.unsatisfiedControls).toContain('authenticationStrength:Phishing-resistant MFA');
+    });
+
+    it('OR: no builtIn controls, only authStrength satisfied → allow', () => {
+      const policy = authStrengthPolicy('as-1', 'Auth Strength Only', 'OR', [], MFA_ID, 'Multifactor authentication');
+      const result = resolver.resolve([policy], [], 1);
+      expect(result.decision).toBe('allow');
+    });
+
+    it('OR: no builtIn controls, only authStrength unsatisfied → controlsRequired', () => {
+      const policy = authStrengthPolicy('as-1', 'Auth Strength Only', 'OR', [], PHISHING_RESISTANT_ID, 'Phishing-resistant MFA');
+      const result = resolver.resolve([policy], [], 0);
+      expect(result.decision).toBe('controlsRequired');
+    });
+
+    it('OR: mfa OR authStrength, user has mfa but not authStrength → satisfied via mfa', () => {
+      const policy = authStrengthPolicy('as-1', 'MFA or Auth Strength', 'OR', ['mfa'], PHISHING_RESISTANT_ID, 'Phishing-resistant MFA');
+      const result = resolver.resolve([policy], ['mfa'], 1);
       expect(result.decision).toBe('allow');
     });
   });

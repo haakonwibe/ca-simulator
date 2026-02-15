@@ -3,7 +3,7 @@
 import { describe, it, expect } from 'vitest';
 import { DevicePlatformMatcher } from '../../conditions/DevicePlatformMatcher';
 import { createTestContext } from '../fixtures/testScenarios';
-import type { PlatformCondition } from '../../models/Policy';
+import type { DevicePlatform, PlatformCondition } from '../../models/Policy';
 
 const matcher = new DevicePlatformMatcher();
 
@@ -63,14 +63,14 @@ describe('DevicePlatformMatcher', () => {
 
     it('is case-insensitive (Hard-Won Lesson #14)', () => {
       // Graph returns lowercase, but we should handle mixed case defensively
-      const condition = createPlatformCondition({ includePlatforms: ['Windows'] });
+      const condition = createPlatformCondition({ includePlatforms: ['Windows' as DevicePlatform] });
       const result = matcher.evaluate(WINDOWS_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
     });
 
     it('handles iOS casing correctly', () => {
-      const condition = createPlatformCondition({ includePlatforms: ['ios'] });
+      const condition = createPlatformCondition({ includePlatforms: ['ios' as DevicePlatform] });
       const result = matcher.evaluate(IOS_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
@@ -126,7 +126,7 @@ describe('DevicePlatformMatcher', () => {
     it('exclusion is case-insensitive', () => {
       const condition = createPlatformCondition({
         includePlatforms: ['all'],
-        excludePlatforms: ['MacOS'], // mixed case
+        excludePlatforms: ['MacOS' as DevicePlatform], // mixed case
       });
       const result = matcher.evaluate(MACOS_CONTEXT, condition);
 

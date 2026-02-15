@@ -23,7 +23,11 @@ export interface PolicyEvaluationResult {
     satisfied: boolean;
     satisfiedControls: string[];
     unsatisfiedControls: string[];
-    authenticationStrength?: string;
+    authenticationStrength?: {
+      displayName: string;
+      policyStrengthId: string;
+      satisfied: boolean;
+    };
   };
   sessionControls?: Record<string, unknown>;
 }

@@ -35,9 +35,12 @@ export function LimitationsDialog({
                 not displayed in the results UI.
               </LimitationItem>
               <LimitationItem>
-                <strong>Authentication Strength</strong> — Policies referencing authentication
-                strength requirements are detected but the specific allowed methods are not resolved
-                or displayed.
+                <strong>Authentication Strength</strong> — The three built-in strengths
+                (Multifactor authentication, Passwordless MFA, Phishing-resistant MFA) are fully
+                resolved with hierarchy-based matching. Custom authentication strengths
+                (admin-defined) are displayed but always show as unsatisfied. The simulator
+                resolves at the strength tier level only — individual authentication methods are
+                not tracked.
               </LimitationItem>
               <LimitationItem>
                 <strong>Device Filter rules</strong> — Complex device filter expressions (e.g.{' '}

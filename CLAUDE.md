@@ -40,6 +40,7 @@ Stateless, deterministic evaluation pipeline. Same inputs always produce same ou
 - `PolicyEvaluator.ts` — Single-policy evaluation (conditions AND'd, short-circuits on first failure)
 - `GrantControlResolver.ts` — Cross-policy grant resolution (always AND across policies)
 - `SessionControlAggregator.ts` — Most-restrictive-wins session control merging
+- `authenticationStrength.ts` — Hierarchy resolution for built-in authentication strengths (MFA < Passwordless MFA < Phishing-resistant MFA). Higher tiers satisfy lower requirements; custom strengths are never satisfied.
 - `conditions/` — 8 matchers: User, Application, DevicePlatform, Location, ClientApp, RiskLevel, DeviceFilter, AuthenticationFlow
 
 **Data models** in `src/engine/models/` mirror `microsoft.graph.conditionalAccessPolicy` schema exactly. The Data Layer normalizes Graph API responses into these types — the engine never sees raw API data.
@@ -52,6 +53,7 @@ Stateless, deterministic evaluation pipeline. Same inputs always produce same ou
 - **Block in any policy → always block.**
 - **No matching enabled policies → implicit allow.**
 - **Report-only policies** go through the full pipeline but never affect the final decision.
+- **Authentication strength is hierarchy-based.** Built-in strengths have levels: MFA (1) < Passwordless MFA (2) < Phishing-resistant MFA (3). A user at level N satisfies any requirement at level ≤ N. Custom/unknown strengths are never satisfied. The `authenticationStrengthLevel` field on `SimulationContext` drives this resolution.
 - **roleTemplateId, not id** — Directory role matching must use `roleTemplateId` from Graph API, not the role instance `id`.
 
 ### State Management (`src/stores/`)
@@ -90,7 +92,7 @@ Auth handled by MSAL's `MsalProvider` + `useMsal()` hook (no separate store). Sc
 
 ## Testing
 
-All 343 tests are in `src/engine/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, full engine integration, and gap analysis. Tests use real policy structures and contexts — no mocking of the engine.
+All 370 tests are in `src/engine/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, and gap analysis. Tests use real policy structures and contexts — no mocking of the engine.
 
 ## Environment
 

@@ -8,7 +8,7 @@ import { usePersonaStore } from '@/stores/usePersonaStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS } from '@/data/theme';
 import type { SimulationContext } from '@/engine/models/SimulationContext';
-import { deriveSatisfiedControls } from '@/lib/deriveSatisfiedControls';
+import { deriveSatisfiedControls, deriveAuthStrengthLevel } from '@/lib/deriveSatisfiedControls';
 import type { ClientAppType, DevicePlatform, RiskLevel } from '@/engine/models/Policy';
 import type { UserSearchResult } from '@/services/personaService';
 import { APP_BUNDLES, BUNDLE_IDS, BUNDLED_APP_IDS } from '@/data/appBundles';
@@ -91,7 +91,8 @@ const DEVICE_OPTIONS = [
 
 const AUTH_OPTIONS = [
   { value: 'none', label: 'None' },
-  { value: 'mfa', label: 'MFA Completed' },
+  { value: 'mfa', label: 'MFA' },
+  { value: 'passwordlessMfa', label: 'Passwordless MFA' },
   { value: 'phishingResistantMfa', label: 'Phishing-resistant MFA' },
 ] as const;
 
@@ -137,7 +138,7 @@ export function ScenarioPanel() {
   const [userRisk, setUserRisk] = useState<RiskLevel | 'none'>('none');
   const [location, setLocation] = useState('any');
   const [deviceState, setDeviceState] = useState('any');
-  const [authentication, setAuthentication] = useState<'none' | 'mfa' | 'phishingResistantMfa'>('none');
+  const [authentication, setAuthentication] = useState<'none' | 'mfa' | 'passwordlessMfa' | 'phishingResistantMfa'>('none');
   const [authFlow, setAuthFlow] = useState<'none' | 'deviceCodeFlow' | 'authenticationTransfer'>('none');
   const [appProtection, setAppProtection] = useState<'none' | 'approvedApp' | 'managedApp' | 'both'>('none');
   const [passwordChanged, setPasswordChanged] = useState(false);
@@ -371,6 +372,7 @@ export function ScenarioPanel() {
       },
       clientAppType: clientApp,
       authenticationFlow: authFlow === 'none' ? undefined : authFlow,
+      authenticationStrengthLevel: deriveAuthStrengthLevel(authentication),
       satisfiedControls: deriveSatisfiedControls({ authentication, deviceState, appProtection, passwordChanged }),
     };
 

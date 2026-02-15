@@ -11,6 +11,8 @@ export interface SimulationContext {
   clientAppType: ClientAppType;
   /** Authentication flow type for the sign-in attempt */
   authenticationFlow?: 'none' | 'deviceCodeFlow' | 'authenticationTransfer';
+  /** Authentication strength level: 0=none, 1=MFA, 2=Passwordless MFA, 3=Phishing-resistant MFA */
+  authenticationStrengthLevel?: number;
   /** Controls the user has already satisfied (for grant resolution) */
   satisfiedControls: SatisfiedControl[];
 }

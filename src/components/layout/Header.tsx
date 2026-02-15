@@ -18,7 +18,7 @@ import { AboutDialog } from '@/components/AboutDialog';
 import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
 import { ReleaseNotesDialog } from '@/components/ReleaseNotesDialog';
-import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check } from 'lucide-react';
+import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github } from 'lucide-react';
 
 export function Header() {
   const { instance, accounts } = useMsal();
@@ -179,8 +179,17 @@ export function Header() {
         </DropdownMenu>
       </div>
 
-      {/* Right: Auth button */}
-      <div className="flex items-center">
+      {/* Right: GitHub + Auth button */}
+      <div className="flex items-center gap-1">
+        <a
+          href="https://github.com/haakonwibe/ca-simulator"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="View source on GitHub"
+          className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50 transition-colors"
+        >
+          <Github className="h-4 w-4" style={{ color: COLORS.textMuted }} />
+        </a>
         {isAuthenticated && account ? (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>

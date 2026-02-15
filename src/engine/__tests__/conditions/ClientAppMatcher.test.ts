@@ -77,7 +77,7 @@ describe('ClientAppMatcher', () => {
   // ──────────────────────────────────────────────
   describe('"all" keyword', () => {
     // Graph API may use 'all' as an explicit value
-    const condition = ['all'] as ClientAppType[];
+    const condition = ['all'] as unknown as ClientAppType[];
 
     it('matches browser', () => {
       const result = matcher.evaluate(BROWSER_CONTEXT, condition);

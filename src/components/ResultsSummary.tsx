@@ -299,7 +299,11 @@ function PolicyCard({
       grantColor = COLORS.blocked;
     } else {
       const controlList = gc.controls.join(', ');
-      grantSummary = `${gc.operator}(${controlList})`;
+      const authStr = gc.authenticationStrength;
+      const fullControlList = authStr
+        ? (controlList ? `${controlList}, authStrength: ${authStr.displayName}` : `authStrength: ${authStr.displayName}`)
+        : controlList;
+      grantSummary = `${gc.operator}(${fullControlList})`;
       if (gc.satisfied) {
         grantSummary += ' \u2014 SATISFIED';
         grantColor = COLORS.granted;
@@ -413,12 +417,24 @@ function PolicyCard({
                 })}
                 {gc.authenticationStrength && (
                   <div className="flex items-center gap-2 text-xs">
-                    <ShieldCheck
-                      className="h-3 w-3 shrink-0"
-                      style={{ color: COLORS.accent }}
-                    />
-                    <span className="font-mono text-[11px] text-muted-foreground">
-                      authStrength: {gc.authenticationStrength}
+                    {gc.authenticationStrength.satisfied ? (
+                      <CheckCircle2
+                        className="h-3 w-3 shrink-0"
+                        style={{ color: COLORS.granted }}
+                      />
+                    ) : (
+                      <XCircle
+                        className="h-3 w-3 shrink-0"
+                        style={{ color: COLORS.unsatisfied }}
+                      />
+                    )}
+                    <span
+                      className="font-mono text-[11px]"
+                      style={{
+                        color: gc.authenticationStrength.satisfied ? COLORS.granted : COLORS.unsatisfied,
+                      }}
+                    >
+                      authStrength: {gc.authenticationStrength.displayName}
                     </span>
                   </div>
                 )}

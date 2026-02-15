@@ -12,6 +12,7 @@ import { ClientAppMatcher } from './conditions/ClientAppMatcher';
 import { RiskLevelMatcher } from './conditions/RiskLevelMatcher';
 import { DeviceFilterMatcher } from './conditions/DeviceFilterMatcher';
 import { AuthenticationFlowMatcher } from './conditions/AuthenticationFlowMatcher';
+import { isAuthStrengthSatisfied } from './authenticationStrength';
 
 /**
  * Evaluates a single Conditional Access policy against a simulation context.
@@ -173,13 +174,31 @@ export class PolicyEvaluator {
     const satisfiedControls = controls.filter((c) => satisfied.includes(c));
     const unsatisfiedControls = controls.filter((c) => !satisfied.includes(c));
 
+    // Authentication strength evaluation
+    let authStrengthResult: { displayName: string; policyStrengthId: string; satisfied: boolean } | undefined;
+    if (grantControls.authenticationStrength) {
+      const userLevel = context.authenticationStrengthLevel ?? 0;
+      const authSatisfied = isAuthStrengthSatisfied(userLevel, grantControls.authenticationStrength.id);
+      authStrengthResult = {
+        displayName: grantControls.authenticationStrength.displayName ?? grantControls.authenticationStrength.id,
+        policyStrengthId: grantControls.authenticationStrength.id,
+        satisfied: authSatisfied,
+      };
+    }
+
     let isSatisfied: boolean;
     if (grantControls.operator === 'AND') {
-      // All controls must be satisfied
-      isSatisfied = unsatisfiedControls.length === 0;
+      // All controls must be satisfied, plus authenticationStrength if present
+      isSatisfied = unsatisfiedControls.length === 0 && (authStrengthResult?.satisfied ?? true);
     } else {
-      // At least one control must be satisfied (OR)
-      isSatisfied = satisfiedControls.length > 0 || controls.length === 0;
+      // At least one control OR authStrength must be satisfied
+      if (controls.length === 0 && authStrengthResult) {
+        isSatisfied = authStrengthResult.satisfied;
+      } else if (controls.length === 0 && !authStrengthResult) {
+        isSatisfied = true;
+      } else {
+        isSatisfied = satisfiedControls.length > 0 || (authStrengthResult?.satisfied ?? false);
+      }
     }
 
     return {
@@ -188,7 +207,7 @@ export class PolicyEvaluator {
       satisfied: isSatisfied,
       satisfiedControls,
       unsatisfiedControls,
-      authenticationStrength: grantControls.authenticationStrength?.displayName ?? grantControls.authenticationStrength?.id,
+      authenticationStrength: authStrengthResult,
     };
   }
 

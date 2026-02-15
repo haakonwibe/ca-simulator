@@ -224,11 +224,25 @@ function PostEvalDetail({
               })}
             </div>
             {evalResult.grantControls.authenticationStrength && (
-              <div
-                className="mt-1.5 text-[10px]"
-                style={{ color: COLORS.textMuted }}
-              >
-                Auth strength: {evalResult.grantControls.authenticationStrength}
+              <div className="flex items-center gap-1.5 mt-1.5">
+                {evalResult.grantControls.authenticationStrength.satisfied ? (
+                  <CheckCircle2
+                    className="h-3 w-3 shrink-0"
+                    style={{ color: COLORS.granted }}
+                  />
+                ) : (
+                  <XCircle
+                    className="h-3 w-3 shrink-0"
+                    style={{ color: COLORS.unsatisfied }}
+                  />
+                )}
+                <span style={{
+                  color: evalResult.grantControls.authenticationStrength.satisfied
+                    ? COLORS.granted
+                    : COLORS.unsatisfied,
+                }}>
+                  authStrength: {evalResult.grantControls.authenticationStrength.displayName}
+                </span>
               </div>
             )}
           </div>

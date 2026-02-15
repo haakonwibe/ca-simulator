@@ -11,8 +11,8 @@ export function deriveSatisfiedControls(scenario: {
 }): SatisfiedControl[] {
   const controls: SatisfiedControl[] = [];
 
-  // Authentication
-  if (scenario.authentication === 'mfa' || scenario.authentication === 'phishingResistantMfa') {
+  // Authentication — any MFA-level option satisfies the built-in 'mfa' control
+  if (scenario.authentication === 'mfa' || scenario.authentication === 'passwordlessMfa' || scenario.authentication === 'phishingResistantMfa') {
     controls.push('mfa');
   }
 
@@ -38,4 +38,17 @@ export function deriveSatisfiedControls(scenario: {
   }
 
   return controls;
+}
+
+/**
+ * Derives the authentication strength level from the scenario authentication value.
+ * 0 = none, 1 = MFA, 2 = Passwordless MFA, 3 = Phishing-resistant MFA
+ */
+export function deriveAuthStrengthLevel(authentication: string): number {
+  switch (authentication) {
+    case 'mfa': return 1;
+    case 'passwordlessMfa': return 2;
+    case 'phishingResistantMfa': return 3;
+    default: return 0;
+  }
 }

@@ -13,7 +13,7 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 
 ## Why
 
-Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 343 unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
+Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 370 unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
 
 ## Features
 
@@ -21,6 +21,7 @@ Microsoft's built-in What If tool evaluates one scenario at a time with no visua
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
 - **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
 - **8 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow
+- **Authentication strength hierarchy** — built-in strengths (MFA, Passwordless MFA, Phishing-resistant MFA) resolved with hierarchy-aware matching; higher tiers satisfy lower requirements
 - **Full evaluation trace** — see exactly which condition knocked out each policy
 - **Sample mode** — 13 demo policies and 5 personas, no Azure tenant required
 - **Live tenant connection** — MSAL + Microsoft Graph API with graceful admin consent handling
@@ -60,7 +61,7 @@ To evaluate your own tenant's policies:
 
 The evaluation engine processes each sign-in scenario through a 4-phase pipeline:
 
-1. **Signal Collection** — capture the simulation context (user, app, device, platform, location, risk level, client app type, satisfied controls)
+1. **Signal Collection** — capture the simulation context (user, app, device, platform, location, risk level, client app type, authentication strength level, satisfied controls)
 2. **Policy Matching** — evaluate each enabled policy's conditions using 8 independent matchers. Conditions are AND'd together; a policy applies only if all configured conditions match. Unconfigured conditions default to match-all.
 3. **Grant Resolution** — resolve grant controls per-policy first (respecting each policy's AND/OR operator), then cross-policy AND: every applicable policy must be independently satisfied. Block in any policy always wins.
 4. **Session Control Aggregation** — merge session controls from all applicable policies using most-restrictive-wins rules
@@ -81,7 +82,7 @@ Every step produces a trace entry, giving full visibility into why each policy w
 
 ```
 Engine Layer       Pure TypeScript, zero dependencies, fully testable in isolation
-                   8 condition matchers, 4-phase evaluation pipeline, 343 unit tests
+                   8 condition matchers, 4-phase evaluation pipeline, 370 unit tests
 
 Data Layer         MSAL authentication, Graph API policy fetch + pagination
                    Batch GUID resolution, named location lookup, persona search
@@ -100,7 +101,7 @@ The engine is a standalone TypeScript module with no knowledge of React, the DOM
 
 ```bash
 npm run dev          # Vite dev server with HMR
-npm test             # Run all 343 engine tests
+npm test             # Run all 370 engine tests
 npm run test:watch   # Watch mode
 npm run build        # Production build
 ```

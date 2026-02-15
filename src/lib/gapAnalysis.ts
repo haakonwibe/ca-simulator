@@ -149,7 +149,8 @@ function classifyResult(
   }
 
   // Enforced policies exist — check MFA and device compliance independently
-  const hasMfa = requiredControls.includes('mfa');
+  const hasMfa = requiredControls.includes('mfa') ||
+    requiredControls.some(c => c.startsWith('authenticationStrength:'));
   const hasCompliantDevice = requiredControls.includes('compliantDevice');
   const isLegacy = clientAppType ? LEGACY_CLIENT_APPS.has(clientAppType) : false;
 
@@ -288,6 +289,7 @@ export function analyzeGaps(
                   },
                   clientAppType: clientApp,
                   authenticationFlow: 'none',
+                  authenticationStrengthLevel: 0,
                   satisfiedControls: [],
                 };
 

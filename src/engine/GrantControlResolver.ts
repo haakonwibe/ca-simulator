@@ -3,6 +3,7 @@
 
 import type { PolicyEvaluationResult, TraceEntry } from './models/EvaluationResult';
 import type { SatisfiedControl } from './models/SimulationContext';
+import { isAuthStrengthSatisfied } from './authenticationStrength';
 
 export interface PolicyBreakdown {
   policyId: string;
@@ -41,9 +42,11 @@ export class GrantControlResolver {
   resolve(
     applicablePolicies: PolicyEvaluationResult[],
     satisfiedControls: SatisfiedControl[],
+    authenticationStrengthLevel?: number,
   ): GrantResolutionResult {
     const trace: TraceEntry[] = [];
     const satisfied = satisfiedControls.map(String);
+    const authLevel = authenticationStrengthLevel ?? 0;
 
     // Step 1: No matching policies → implicit allow
     if (applicablePolicies.length === 0) {
@@ -93,7 +96,7 @@ export class GrantControlResolver {
     const allUnsatisfiedSet = new Set<string>();
 
     for (const policy of applicablePolicies) {
-      const breakdown = this.evaluatePolicy(policy, satisfied);
+      const breakdown = this.evaluatePolicy(policy, satisfied, authLevel);
       policyBreakdown.push(breakdown);
 
       for (const c of breakdown.requiredControls) {
@@ -117,7 +120,14 @@ export class GrantControlResolver {
 
     const allRequired = [...allRequiredSet];
     const allUnsatisfied = [...allUnsatisfiedSet];
-    const allSatisfiedControls = allRequired.filter((c) => satisfied.includes(c));
+    // Derive satisfied controls from breakdowns (includes authStrength labels)
+    const allSatisfiedSet = new Set<string>();
+    for (const b of policyBreakdown) {
+      for (const c of b.satisfiedControls) {
+        allSatisfiedSet.add(c);
+      }
+    }
+    const allSatisfiedControls = allRequired.filter((c) => allSatisfiedSet.has(c));
 
     if (allSatisfied) {
       trace.push(this.trace('All policies satisfied — decision: allow'));
@@ -148,6 +158,7 @@ export class GrantControlResolver {
   private evaluatePolicy(
     policy: PolicyEvaluationResult,
     satisfiedControls: string[],
+    authenticationStrengthLevel: number,
   ): PolicyBreakdown {
     // Policy with no grant controls (session-only) — automatically satisfied
     if (!policy.grantControls) {
@@ -168,15 +179,11 @@ export class GrantControlResolver {
     const controlsSatisfied = controls.filter((c) => satisfiedControls.includes(c));
     const controlsUnsatisfied = controls.filter((c) => !satisfiedControls.includes(c));
 
-    // Handle authenticationStrength as an additional control requirement
+    // Handle authenticationStrength via hierarchy resolution
     let authStrengthSatisfied = true;
     const authStrength = policy.grantControls.authenticationStrength;
     if (authStrength) {
-      // Check if 'authenticationStrength' is in satisfiedControls (generic)
-      // or if the specific strength ID is present
-      authStrengthSatisfied =
-        satisfiedControls.includes('authenticationStrength') ||
-        satisfiedControls.includes(`authenticationStrength:${authStrength}`);
+      authStrengthSatisfied = isAuthStrengthSatisfied(authenticationStrengthLevel, authStrength.policyStrengthId);
     }
 
     // Determine per-policy satisfaction
@@ -187,26 +194,26 @@ export class GrantControlResolver {
     } else {
       // At least one control must be satisfied
       // authenticationStrength counts as a satisfiable control for OR
-      satisfied = controlsSatisfied.length > 0 || (authStrength !== undefined && authStrengthSatisfied);
-      // Edge case: OR with empty controls but authStrength only
       if (controls.length === 0 && authStrength) {
         satisfied = authStrengthSatisfied;
-      }
-      // Edge case: OR with no controls at all
-      if (controls.length === 0 && !authStrength) {
+      } else if (controls.length === 0 && !authStrength) {
         satisfied = true;
+      } else {
+        satisfied = controlsSatisfied.length > 0 || (authStrength !== undefined && authStrengthSatisfied);
       }
     }
 
     // Include authenticationStrength in the required/unsatisfied lists
     const requiredControls = [...controls];
     const unsatisfiedResult = [...controlsUnsatisfied];
-    if (authStrength && !authStrengthSatisfied) {
-      requiredControls.push(`authenticationStrength:${authStrength}`);
-      unsatisfiedResult.push(`authenticationStrength:${authStrength}`);
-    } else if (authStrength && authStrengthSatisfied) {
-      requiredControls.push(`authenticationStrength:${authStrength}`);
-      controlsSatisfied.push(`authenticationStrength:${authStrength}`);
+    const authStrengthLabel = authStrength ? `authenticationStrength:${authStrength.displayName}` : undefined;
+    if (authStrengthLabel) {
+      requiredControls.push(authStrengthLabel);
+      if (authStrengthSatisfied) {
+        controlsSatisfied.push(authStrengthLabel);
+      } else {
+        unsatisfiedResult.push(authStrengthLabel);
+      }
     }
 
     return {

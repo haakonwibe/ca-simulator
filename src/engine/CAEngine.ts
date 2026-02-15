@@ -37,6 +37,7 @@ export class CAEngine {
         risk: context.risk,
         clientAppType: context.clientAppType,
         satisfiedControls: context.satisfiedControls,
+        authenticationStrengthLevel: context.authenticationStrengthLevel ?? 0,
       },
     });
 
@@ -95,7 +96,11 @@ export class CAEngine {
 
     // ── Phase 3: Grant Resolution ──
     // Only enforced, applicable policies affect the final decision
-    const grantResult = this.grantResolver.resolve(appliedPolicies, context.satisfiedControls);
+    const grantResult = this.grantResolver.resolve(
+      appliedPolicies,
+      context.satisfiedControls,
+      context.authenticationStrengthLevel,
+    );
     trace.push(...grantResult.trace);
 
     // ── Phase 4: Session Control Aggregation ──
