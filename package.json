@@ -1,5 +1,5 @@
 {
-  "name": "conditional-access-simulator",
+  "name": "ca-simulator",
   "version": "0.3.0",
   "description": "A Conditional Access policy simulator for Microsoft Entra ID",
   "author": "Haakon Wibe",
