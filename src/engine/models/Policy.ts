@@ -26,6 +26,7 @@ export interface PolicyConditions {
   devices?: DeviceFilterCondition;
   authenticationFlows?: AuthenticationFlowCondition;
   servicePrincipalRiskLevels?: RiskLevel[];
+  insiderRiskLevels?: InsiderRiskLevel[];
 }
 
 export interface AuthenticationFlowCondition {
@@ -79,6 +80,7 @@ export interface DeviceFilterCondition {
 
 export type ClientAppType = 'browser' | 'mobileAppsAndDesktopClients' | 'exchangeActiveSync' | 'other';
 export type RiskLevel = 'low' | 'medium' | 'high' | 'none';
+export type InsiderRiskLevel = 'minor' | 'moderate' | 'elevated';
 
 export interface GrantControls {
   operator: 'AND' | 'OR';
@@ -104,4 +106,5 @@ export interface SessionControls {
   persistentBrowser?: { isEnabled: boolean; mode: 'always' | 'never' };
   continuousAccessEvaluation?: { mode: string };
   disableResilienceDefaults?: boolean;
+  secureSignInSession?: { isEnabled: boolean };
 }

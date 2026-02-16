@@ -62,7 +62,7 @@ export function Header() {
         device: {},
         location: {},
         clientAppType: 'browser',
-        risk: { signInRiskLevel: 'none', userRiskLevel: 'none' },
+        risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none' },
         satisfiedControls: [],
       };
       useEvaluationStore.getState().evaluate(policies, context);
@@ -96,7 +96,7 @@ export function Header() {
           className="text-[10px] px-1.5 py-0 h-5 font-normal"
           style={{ color: COLORS.textMuted, borderColor: COLORS.border }}
         >
-          v0.3 beta
+          v0.3.3 beta
         </Badge>
         <Button
           variant="ghost"
@@ -104,6 +104,7 @@ export function Header() {
           className="h-7 w-7 p-0"
           onClick={() => setReleaseNotesOpen(true)}
           title="Release notes"
+          aria-label="Release notes"
         >
           <FileText className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
@@ -113,6 +114,7 @@ export function Header() {
           className="h-7 w-7 p-0"
           onClick={() => setAboutOpen(true)}
           title="What is this?"
+          aria-label="What is this?"
         >
           <HelpCircle className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
@@ -122,6 +124,7 @@ export function Header() {
           className="h-7 w-7 p-0"
           onClick={() => setTipsOpen(true)}
           title="Understanding your results"
+          aria-label="Understanding your results"
         >
           <Info className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
@@ -131,6 +134,7 @@ export function Header() {
           className="h-7 w-7 p-0"
           onClick={() => setLimitationsOpen(true)}
           title="Known limitations"
+          aria-label="Known limitations"
         >
           <AlertTriangle className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
@@ -186,6 +190,7 @@ export function Header() {
           target="_blank"
           rel="noopener noreferrer"
           title="View source on GitHub"
+          aria-label="View source on GitHub"
           className="inline-flex h-8 w-8 items-center justify-center rounded-md hover:bg-accent/50 transition-colors"
         >
           <Github className="h-4 w-4" style={{ color: COLORS.textMuted }} />

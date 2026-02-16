@@ -9,3 +9,4 @@ export { ClientAppMatcher } from './ClientAppMatcher';
 export { RiskLevelMatcher } from './RiskLevelMatcher';
 export type { RiskCondition } from './RiskLevelMatcher';
 export { DeviceFilterMatcher, evaluateFilterRule } from './DeviceFilterMatcher';
+export { InsiderRiskMatcher } from './InsiderRiskMatcher';

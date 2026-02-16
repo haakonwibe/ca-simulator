@@ -9,7 +9,7 @@ import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS } from '@/data/theme';
 import type { SimulationContext } from '@/engine/models/SimulationContext';
 import { deriveSatisfiedControls, deriveAuthStrengthLevel } from '@/lib/deriveSatisfiedControls';
-import type { ClientAppType, DevicePlatform, RiskLevel } from '@/engine/models/Policy';
+import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from '@/engine/models/Policy';
 import type { UserSearchResult } from '@/services/personaService';
 import { APP_BUNDLES, BUNDLE_IDS, BUNDLED_APP_IDS } from '@/data/appBundles';
 import { AboutDialog } from '@/components/AboutDialog';
@@ -48,6 +48,8 @@ import {
   FlaskConical,
   CheckCircle2,
   ArrowRightLeft,
+  Target,
+  Fingerprint,
 } from 'lucide-react';
 
 // ── Static option lists ─────────────────────────────────────────────
@@ -73,6 +75,13 @@ const RISK_OPTIONS = [
   { value: 'low', label: 'Low' },
   { value: 'medium', label: 'Medium' },
   { value: 'high', label: 'High' },
+] as const;
+
+const INSIDER_RISK_OPTIONS = [
+  { value: 'none', label: 'None' },
+  { value: 'minor', label: 'Minor' },
+  { value: 'moderate', label: 'Moderate' },
+  { value: 'elevated', label: 'Elevated' },
 ] as const;
 
 const LOCATION_OPTIONS = [
@@ -109,6 +118,23 @@ const APP_PROTECTION_OPTIONS = [
   { value: 'both', label: 'Approved + Managed' },
 ] as const;
 
+const TARGET_MODE_OPTIONS = [
+  { value: 'resources', label: 'Resources (Cloud Apps)' },
+  { value: 'userActions', label: 'User Actions' },
+  { value: 'authContext', label: 'Authentication Context' },
+] as const;
+
+const USER_ACTION_OPTIONS = [
+  { value: 'registerSecurityInformation', label: 'Register security information' },
+  { value: 'registerOrJoinDevices', label: 'Register or join devices' },
+] as const;
+
+const AUTH_CONTEXT_OPTIONS = [
+  { value: 'c1', label: 'C1' },
+  { value: 'c2', label: 'C2' },
+  { value: 'c3', label: 'C3' },
+] as const;
+
 /** IDs that should not appear as individual tenant apps (bundles + meta values) */
 const HIDDEN_APP_IDS = new Set([...BUNDLE_IDS, 'None']);
 
@@ -123,6 +149,7 @@ export function ScenarioPanel() {
   const policyError = usePolicyStore((s) => s.error);
   const displayNames = usePolicyStore((s) => s.displayNames);
   const dataSource = usePolicyStore((s) => s.dataSource);
+  const authStrengthMap = usePolicyStore((s) => s.authStrengthMap);
   const resolvedPersonas = usePersonaStore((s) => s.resolvedPersonas);
   const selectedPersonaId = usePersonaStore((s) => s.selectedPersonaId);
   const isResolving = usePersonaStore((s) => s.isResolving);
@@ -131,11 +158,15 @@ export function ScenarioPanel() {
   const isSampleMode = dataSource === 'sample';
 
   // Form state
+  const [targetMode, setTargetMode] = useState<'resources' | 'userActions' | 'authContext'>('resources');
+  const [userAction, setUserAction] = useState<string>('registerSecurityInformation');
+  const [authContext, setAuthContext] = useState<string>('c1');
   const [appId, setAppId] = useState('All');
   const [platform, setPlatform] = useState('any');
   const [clientApp, setClientApp] = useState<ClientAppType>('browser');
   const [signInRisk, setSignInRisk] = useState<RiskLevel | 'none'>('none');
   const [userRisk, setUserRisk] = useState<RiskLevel | 'none'>('none');
+  const [insiderRisk, setInsiderRisk] = useState<InsiderRiskLevel | 'none'>('none');
   const [location, setLocation] = useState('any');
   const [deviceState, setDeviceState] = useState('any');
   const [authentication, setAuthentication] = useState<'none' | 'mfa' | 'passwordlessMfa' | 'phishingResistantMfa'>('none');
@@ -187,7 +218,7 @@ export function ScenarioPanel() {
         application: { appId: 'All', displayName: 'All Cloud Apps' },
         device: {},
         location: {},
-        risk: { signInRiskLevel: 'none', userRiskLevel: 'none' },
+        risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none' },
         clientAppType: 'browser',
         satisfiedControls: [],
       };
@@ -342,15 +373,29 @@ export function ScenarioPanel() {
   const handleEvaluate = () => {
     if (!selectedPersona) return;
 
+    const application = targetMode === 'userActions'
+      ? {
+          appId: '',
+          displayName: 'User Action',
+          userAction: userAction as 'registerSecurityInformation' | 'registerOrJoinDevices',
+        }
+      : targetMode === 'authContext'
+      ? {
+          appId: '',
+          displayName: 'Authentication Context',
+          authenticationContext: authContext,
+        }
+      : {
+          appId,
+          displayName:
+            APP_BUNDLES.find((b) => b.id === appId)?.displayName
+            ?? tenantApps.find((a) => a.value === appId)?.label
+            ?? appId,
+        };
+
     const context: SimulationContext = {
       user: selectedPersona,
-      application: {
-        appId,
-        displayName:
-          APP_BUNDLES.find((b) => b.id === appId)?.displayName
-          ?? tenantApps.find((a) => a.value === appId)?.label
-          ?? appId,
-      },
+      application,
       device: {
         platform: platform === 'any' ? undefined : (platform as DevicePlatform),
         isCompliant:
@@ -369,10 +414,12 @@ export function ScenarioPanel() {
       risk: {
         signInRiskLevel: signInRisk,
         userRiskLevel: userRisk,
+        insiderRiskLevel: insiderRisk,
       },
       clientAppType: clientApp,
       authenticationFlow: authFlow === 'none' ? undefined : authFlow,
       authenticationStrengthLevel: deriveAuthStrengthLevel(authentication),
+      customAuthStrengthMap: authStrengthMap.size > 0 ? authStrengthMap : undefined,
       satisfiedControls: deriveSatisfiedControls({ authentication, deviceState, appProtection, passwordChanged }),
     };
 
@@ -623,43 +670,100 @@ export function ScenarioPanel() {
           </Select>
         </div>
 
-        {/* Application */}
+        {/* Target Resource */}
         <div>
-          <SectionLabel icon={<AppWindow className="h-3 w-3" />} label="Application" />
-          <Select value={appId} onValueChange={(v) => { clearResults(); setAppId(v); }}>
+          <SectionLabel icon={<Target className="h-3 w-3" />} label="Target Resource" />
+          <Select value={targetMode} onValueChange={(v: 'resources' | 'userActions' | 'authContext') => { clearResults(); setTargetMode(v); setAppId('All'); setUserAction('registerSecurityInformation'); setAuthContext('c1'); }}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectGroup>
-                <SelectLabel className="text-[10px] text-muted-foreground">Bundles</SelectLabel>
-                {APP_BUNDLES.map((bundle) => (
-                  <SelectItem
-                    key={bundle.id}
-                    value={bundle.id}
-                    className="text-xs"
-                    description={bundle.id !== 'All' ? bundle.description : undefined}
-                  >
-                    {bundle.displayName}
-                  </SelectItem>
-                ))}
-              </SelectGroup>
-              {tenantApps.length > 0 && (
-                <>
-                  <SelectSeparator />
-                  <SelectGroup>
-                    <SelectLabel className="text-[10px] text-muted-foreground">Tenant Apps</SelectLabel>
-                    {tenantApps.map((app) => (
-                      <SelectItem key={app.value} value={app.value} className="text-xs">
-                        {app.label}
-                      </SelectItem>
-                    ))}
-                  </SelectGroup>
-                </>
-              )}
+              {TARGET_MODE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
             </SelectContent>
           </Select>
         </div>
+
+        {/* Application (Resources mode) */}
+        {targetMode === 'resources' && (
+          <div>
+            <SectionLabel icon={<AppWindow className="h-3 w-3" />} label="Application" />
+            <Select value={appId} onValueChange={(v) => { clearResults(); setAppId(v); }}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] text-muted-foreground">Bundles</SelectLabel>
+                  {APP_BUNDLES.map((bundle) => (
+                    <SelectItem
+                      key={bundle.id}
+                      value={bundle.id}
+                      className="text-xs"
+                      description={bundle.id !== 'All' ? bundle.description : undefined}
+                    >
+                      {bundle.displayName}
+                    </SelectItem>
+                  ))}
+                </SelectGroup>
+                {tenantApps.length > 0 && (
+                  <>
+                    <SelectSeparator />
+                    <SelectGroup>
+                      <SelectLabel className="text-[10px] text-muted-foreground">Tenant Apps</SelectLabel>
+                      {tenantApps.map((app) => (
+                        <SelectItem key={app.value} value={app.value} className="text-xs">
+                          {app.label}
+                        </SelectItem>
+                      ))}
+                    </SelectGroup>
+                  </>
+                )}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* User Action mode */}
+        {targetMode === 'userActions' && (
+          <div>
+            <SectionLabel icon={<Fingerprint className="h-3 w-3" />} label="User Action" />
+            <Select value={userAction} onValueChange={(v) => { clearResults(); setUserAction(v); }}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {USER_ACTION_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
+
+        {/* Authentication Context mode */}
+        {targetMode === 'authContext' && (
+          <div>
+            <SectionLabel icon={<ShieldAlert className="h-3 w-3" />} label="Auth Context" />
+            <Select value={authContext} onValueChange={(v) => { clearResults(); setAuthContext(v); }}>
+              <SelectTrigger className="h-8 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {AUTH_CONTEXT_OPTIONS.map((opt) => (
+                  <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                    {opt.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        )}
 
         {/* Platform */}
         <div>
@@ -740,6 +844,23 @@ export function ScenarioPanel() {
             </SelectTrigger>
             <SelectContent>
               {RISK_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Insider Risk */}
+        <div>
+          <SectionLabel icon={<ShieldAlert className="h-3 w-3" />} label="Insider Risk" />
+          <Select value={insiderRisk} onValueChange={(v) => { clearResults(); setInsiderRisk(v as InsiderRiskLevel | 'none'); }}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {INSIDER_RISK_OPTIONS.map((opt) => (
                 <SelectItem key={opt.value} value={opt.value} className="text-xs">
                   {opt.label}
                 </SelectItem>

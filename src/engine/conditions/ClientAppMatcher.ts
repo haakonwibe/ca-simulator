@@ -22,7 +22,7 @@ export class ClientAppMatcher implements ConditionMatcher<ClientAppType[]> {
         conditionType: 'clientAppTypes',
         matches: true,
         reason: 'Client app type condition is unconfigured (empty) — matches all client app types',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 

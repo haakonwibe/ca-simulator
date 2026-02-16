@@ -137,9 +137,10 @@ export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchI
 
       {/* Search results dropdown */}
       {showResults && searchResults.length > 0 && (
-        <div className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
+        <div role="listbox" aria-label="User search results" className="absolute z-50 mt-1 w-full rounded-md border border-border bg-popover shadow-md">
           {searchResults.map((user) => (
             <button
+              role="option"
               key={user.id}
               onClick={() => handleSelect(user)}
               className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-accent/50 first:rounded-t-md last:rounded-b-md"

@@ -9,7 +9,11 @@ import {
   type UserSearchResult,
 } from '../services/personaService';
 import { getAccessToken } from '../services/auth';
+import { GraphPermissionError, ADMIN_CONSENT_ERROR } from '../services/graphClient';
 import { SAMPLE_PERSONAS } from '../data/samplePersonas';
+
+// Module-scoped in-flight request tracker to deduplicate concurrent resolveAndCache calls
+const inflight = new Map<string, Promise<UserContext>>();
 
 interface PersonaState {
   // Resolved personas cache: userId → UserContext
@@ -66,25 +70,37 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
       return cached;
     }
 
-    set({ isResolving: true, error: null });
-    try {
-      const token = await getAccessToken();
-      const context = await resolveUserContext(token, userId);
-      const updated = new Map(get().resolvedPersonas);
-      updated.set(userId, context);
-      set({
-        resolvedPersonas: updated,
-        selectedPersonaId: userId,
-        isResolving: false,
-      });
-      return context;
-    } catch (error) {
-      set({
-        isResolving: false,
-        error: error instanceof Error ? error.message : 'Failed to resolve user',
-      });
-      throw error;
-    }
+    // Deduplicate concurrent requests for the same user
+    const pending = inflight.get(userId);
+    if (pending) return pending;
+
+    const promise = (async () => {
+      set({ isResolving: true, error: null });
+      try {
+        const token = await getAccessToken();
+        const context = await resolveUserContext(token, userId);
+        const updated = new Map(get().resolvedPersonas);
+        updated.set(userId, context);
+        set({
+          resolvedPersonas: updated,
+          selectedPersonaId: userId,
+          isResolving: false,
+        });
+        return context;
+      } catch (error) {
+        const errorMessage =
+          error instanceof GraphPermissionError
+            ? ADMIN_CONSENT_ERROR
+            : error instanceof Error ? error.message : 'Failed to resolve user';
+        set({ isResolving: false, error: errorMessage });
+        throw error;
+      } finally {
+        inflight.delete(userId);
+      }
+    })();
+
+    inflight.set(userId, promise);
+    return promise;
   },
 
   resolveAndCacheSample: (userId: string) => {

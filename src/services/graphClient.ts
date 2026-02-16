@@ -33,9 +33,16 @@ export async function graphFetch<T>(endpoint: string, token: string): Promise<T>
     if (!response.ok) {
       if (response.status === 403) throw new GraphPermissionError();
       if (response.status === 429) {
+        clearTimeout(timeoutId);
         const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
-        await new Promise(r => setTimeout(r, retryAfter * 1000));
-        return graphFetch<T>(endpoint, token); // retry once (next 429 will throw)
+        await new Promise<void>((resolve, reject) => {
+          const sleepId = setTimeout(resolve, retryAfter * 1000);
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(sleepId);
+            reject(new DOMException('Aborted', 'AbortError'));
+          }, { once: true });
+        });
+        return graphFetch<T>(endpoint, token);
       }
       throw new Error(`Graph API error: ${response.status} ${response.statusText}`);
     }
@@ -61,8 +68,15 @@ export async function graphPost<T>(endpoint: string, token: string, body: unknow
     if (!response.ok) {
       if (response.status === 403) throw new GraphPermissionError();
       if (response.status === 429) {
+        clearTimeout(timeoutId);
         const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
-        await new Promise(r => setTimeout(r, retryAfter * 1000));
+        await new Promise<void>((resolve, reject) => {
+          const sleepId = setTimeout(resolve, retryAfter * 1000);
+          controller.signal.addEventListener('abort', () => {
+            clearTimeout(sleepId);
+            reject(new DOMException('Aborted', 'AbortError'));
+          }, { once: true });
+        });
         return graphPost<T>(endpoint, token, body);
       }
       throw new Error(`Graph API error: ${response.status} ${response.statusText}`);

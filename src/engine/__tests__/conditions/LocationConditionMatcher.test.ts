@@ -163,7 +163,7 @@ describe('LocationConditionMatcher', () => {
       const result = matcher.evaluate(TRUSTED_LOCATION_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
 
     it('matches empty location context when unconfigured', () => {
@@ -171,7 +171,7 @@ describe('LocationConditionMatcher', () => {
       const result = matcher.evaluate(EMPTY_LOCATION_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
   });
 

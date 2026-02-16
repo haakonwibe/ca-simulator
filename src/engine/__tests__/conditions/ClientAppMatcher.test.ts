@@ -56,7 +56,7 @@ describe('ClientAppMatcher', () => {
     it('matches browser', () => {
       const result = matcher.evaluate(BROWSER_CONTEXT, condition);
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
 
     it('matches mobile apps', () => {

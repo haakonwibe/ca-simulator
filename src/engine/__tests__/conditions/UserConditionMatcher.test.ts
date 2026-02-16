@@ -17,7 +17,7 @@ describe('UserConditionMatcher', () => {
       const result = matcher.evaluate(STANDARD_USER_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
   });
 

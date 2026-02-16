@@ -100,6 +100,7 @@ export class CAEngine {
       appliedPolicies,
       context.satisfiedControls,
       context.authenticationStrengthLevel,
+      context.customAuthStrengthMap,
     );
     trace.push(...grantResult.trace);
 
@@ -115,7 +116,7 @@ export class CAEngine {
       appliedPolicies,
       skippedPolicies,
       reportOnlyPolicies,
-      sessionControls: sessionResult.sessionControls as Record<string, unknown>,
+      sessionControls: sessionResult.sessionControls,
       trace,
     };
   }

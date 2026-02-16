@@ -4,7 +4,7 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS, CATEGORY_META } from '@/data/theme';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
-import type { PolicyEvaluationResult, ConditionMatchResult } from '@/engine/models/EvaluationResult';
+import type { PolicyEvaluationResult, ConditionMatchResult, ExtractedSessionControls } from '@/engine/models/EvaluationResult';
 import { X, CheckCircle2, XCircle, Minus, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -34,6 +34,9 @@ export function PolicyDetailPanel() {
 
   return (
     <div
+      role="region"
+      aria-label="Policy details"
+      aria-hidden={!isOpen}
       style={{
         position: 'absolute',
         right: 0,
@@ -261,12 +264,10 @@ function PostEvalDetail({
                 backgroundColor: COLORS.bgCard,
               }}
             >
-              {Object.entries(evalResult.sessionControls).map(([key, value]) => (
-                <div key={key} className="flex items-center gap-1.5">
-                  <span style={{ color: COLORS.textMuted }}>{key}:</span>
-                  <span style={{ color: COLORS.text }}>
-                    {typeof value === 'object' ? JSON.stringify(value) : String(value)}
-                  </span>
+              {formatExtractedSessionControls(evalResult.sessionControls).map(({ label, value }) => (
+                <div key={label} className="flex items-center gap-1.5">
+                  <span style={{ color: COLORS.textMuted }}>{label}:</span>
+                  <span style={{ color: COLORS.text }}>{value}</span>
                 </div>
               ))}
             </div>
@@ -372,10 +373,7 @@ function ConditionRow({
     );
     statusColor = COLORS.reportOnly;
     statusText = 'Excluded';
-  } else if (
-    conditionResult.phase === 'unconfigured' ||
-    conditionResult.phase === 'notConfigured'
-  ) {
+  } else if (conditionResult.phase === 'notConfigured') {
     icon = <Minus className="h-3 w-3 shrink-0" style={{ color: COLORS.textDim }} />;
     statusColor = COLORS.textDim;
     statusText = 'Not configured';
@@ -434,9 +432,13 @@ function SessionControlsList({
   const items: { label: string; value: string }[] = [];
 
   if (sessionControls.signInFrequency?.isEnabled) {
+    const freq = sessionControls.signInFrequency;
+    const unit = freq.type === 'hours'
+      ? (freq.value === 1 ? 'hour' : 'hours')
+      : (freq.value === 1 ? 'day' : 'days');
     items.push({
       label: 'Sign-in frequency',
-      value: `${sessionControls.signInFrequency.value} ${sessionControls.signInFrequency.type}`,
+      value: `${freq.value} ${unit}`,
     });
   }
   if (sessionControls.persistentBrowser?.isEnabled) {
@@ -460,6 +462,12 @@ function SessionControlsList({
       value: sessionControls.continuousAccessEvaluation.mode,
     });
   }
+  if (sessionControls.disableResilienceDefaults === true) {
+    items.push({ label: 'Resilience defaults', value: 'Disabled' });
+  }
+  if (sessionControls.secureSignInSession?.isEnabled) {
+    items.push({ label: 'Token protection', value: 'Enabled' });
+  }
 
   if (items.length === 0) {
     return <span style={{ color: COLORS.textDim }}>None</span>;
@@ -475,6 +483,40 @@ function SessionControlsList({
       ))}
     </div>
   );
+}
+
+function formatExtractedSessionControls(
+  sc: ExtractedSessionControls,
+): { label: string; value: string }[] {
+  const items: { label: string; value: string }[] = [];
+
+  if (sc.signInFrequency) {
+    const freq = sc.signInFrequency;
+    const unit = freq.type === 'hours'
+      ? (freq.value === 1 ? 'hour' : 'hours')
+      : (freq.value === 1 ? 'day' : 'days');
+    items.push({ label: 'Sign-in frequency', value: `${freq.value} ${unit}` });
+  }
+  if (sc.persistentBrowser) {
+    items.push({ label: 'Persistent browser', value: sc.persistentBrowser });
+  }
+  if (sc.cloudAppSecurity) {
+    items.push({ label: 'Cloud app security', value: sc.cloudAppSecurity });
+  }
+  if (sc.continuousAccessEvaluation) {
+    items.push({ label: 'CAE', value: sc.continuousAccessEvaluation });
+  }
+  if (sc.applicationEnforcedRestrictions) {
+    items.push({ label: 'App enforced restrictions', value: 'Enabled' });
+  }
+  if (sc.disableResilienceDefaults) {
+    items.push({ label: 'Resilience defaults', value: 'Disabled' });
+  }
+  if (sc.secureSignInSession) {
+    items.push({ label: 'Token protection', value: 'Enabled' });
+  }
+
+  return items;
 }
 
 function SectionHeading({

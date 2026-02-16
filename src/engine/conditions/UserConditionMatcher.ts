@@ -199,7 +199,7 @@ export class UserConditionMatcher implements ConditionMatcher<UserCondition> {
         conditionType: 'users',
         matches: true,
         reason: 'User condition is unconfigured — matches all users by default',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 

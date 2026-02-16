@@ -343,7 +343,7 @@ describe('ApplicationConditionMatcher', () => {
       const result = matcher.evaluate(CUSTOM_APP_CONTEXT, condition);
 
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
   });
 
@@ -507,7 +507,7 @@ describe('ApplicationConditionMatcher', () => {
       const condition = createApplicationCondition();
       const result = matcher.evaluate(avdBundleContext, condition);
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
   });
 

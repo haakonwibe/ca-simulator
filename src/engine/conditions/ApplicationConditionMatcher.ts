@@ -183,7 +183,7 @@ export class ApplicationConditionMatcher implements ConditionMatcher<Application
         conditionType: 'applications',
         matches: true,
         reason: 'Application condition is unconfigured — matches all applications by default',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 
@@ -222,7 +222,7 @@ export class ApplicationConditionMatcher implements ConditionMatcher<Application
         conditionType: 'applications',
         matches: true,
         reason: 'Application condition is unconfigured — matches all applications by default',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 

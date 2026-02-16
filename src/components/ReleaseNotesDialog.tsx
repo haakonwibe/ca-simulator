@@ -17,6 +17,68 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.3.3',
+    subtitle: 'Sample Policy Showcase',
+    features: [
+      {
+        heading: 'Expanded Sample Policies',
+        body: 'Three new sample policies (CA017-CA019) demonstrate custom authentication strengths, token protection, and session controls. Sample mode now showcases every engine feature out of the box.',
+      },
+    ],
+  },
+  {
+    version: 'v0.3.2',
+    subtitle: 'Engine Parity & Custom Auth Strength',
+    features: [
+      {
+        heading: 'Custom Authentication Strengths',
+        body: 'Admin-defined authentication strengths are now resolved via Graph API. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) based on their allowed combinations.',
+      },
+      {
+        heading: 'Insider Risk Conditions',
+        body: 'Full support for policies targeting insider risk levels (minor, moderate, elevated). New condition matcher with direct list membership matching.',
+      },
+      {
+        heading: 'Target Resource Modes',
+        body: 'Simulate policies targeting User Actions (security info registration, device registration) and Authentication Contexts (C1-C3), not just cloud apps.',
+      },
+      {
+        heading: 'Session Controls in Verdict',
+        body: 'Aggregated session controls now appear in the verdict summary with source policy links. Token protection (secureSignInSession) is fully supported.',
+      },
+    ],
+  },
+  {
+    version: 'v0.3.1',
+    subtitle: 'Reliability & Code Quality',
+    features: [
+      {
+        heading: 'Consistent Admin Consent Handling',
+        body: 'Improved error handling when admin consent is required — the consent banner now appears consistently across all Graph API operations, including user resolution and app name lookups.',
+      },
+      {
+        heading: 'Authentication Stability',
+        body: 'Fixed a race condition in authentication initialization that could require signing in twice. The login event listener now registers before checking account state.',
+      },
+      {
+        heading: 'Smarter API Retries',
+        body: 'Improved retry reliability for rate-limited API requests. Each retry attempt now gets a fresh timeout, and retry sleeps are cancellable to prevent resource leaks.',
+      },
+      {
+        heading: 'Session Control Accuracy',
+        body: 'Cloud app security session controls now correctly pick the most restrictive type when multiple policies apply, matching the behavior of other session control aggregations.',
+      },
+      {
+        heading: 'Accessibility',
+        body: 'Screen reader support for icon buttons, search results, policy detail panel, and expandable sections. All interactive elements now have proper ARIA labels and roles.',
+      },
+      {
+        heading: 'Internal Quality',
+        body: 'Type-safe session controls pipeline, standardized condition phase naming, request deduplication for user resolution, and removed unused dependencies.',
+      },
+    ],
+  },
+  {
     version: 'v0.3',
     subtitle: 'Live Tenant & Stability Update',
     features: [

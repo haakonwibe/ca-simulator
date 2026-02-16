@@ -24,6 +24,7 @@ export function createTestContext(overrides?: Partial<SimulationContext>): Simul
     risk: {
       signInRiskLevel: 'none',
       userRiskLevel: 'none',
+      insiderRiskLevel: 'none',
     },
     clientAppType: 'browser',
     satisfiedControls: [],

@@ -72,7 +72,7 @@ export class LocationConditionMatcher implements ConditionMatcher<LocationCondit
         conditionType: 'locations',
         matches: true,
         reason: 'Location condition is unconfigured — matches all locations by default',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 

@@ -27,21 +27,8 @@ export function LimitationsDialog({
         </DialogHeader>
 
         <div className="space-y-5 text-sm" style={{ color: COLORS.textMuted }}>
-          <Section title="Not yet implemented">
+          <Section title="Simplified matching">
             <ul className="space-y-2 mt-1">
-              <LimitationItem>
-                <strong>Session Controls</strong> — Sign-in frequency, persistent browser, cloud app
-                security, and continuous access evaluation conditions are evaluated by the engine but
-                not displayed in the results UI.
-              </LimitationItem>
-              <LimitationItem>
-                <strong>Authentication Strength</strong> — The three built-in strengths
-                (Multifactor authentication, Passwordless MFA, Phishing-resistant MFA) are fully
-                resolved with hierarchy-based matching. Custom authentication strengths
-                (admin-defined) are displayed but always show as unsatisfied. The simulator
-                resolves at the strength tier level only — individual authentication methods are
-                not tracked.
-              </LimitationItem>
               <LimitationItem>
                 <strong>Device Filter rules</strong> — Complex device filter expressions (e.g.{' '}
                 <code className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: COLORS.accent }}>
@@ -50,10 +37,9 @@ export function LimitationsDialog({
                 ) use simplified matching. A full expression parser is planned.
               </LimitationItem>
               <LimitationItem>
-                <strong>Insider Risk conditions</strong> — Not yet supported by the engine.
-              </LimitationItem>
-              <LimitationItem>
-                <strong>Token Protection</strong> — Not yet supported by the engine.
+                <strong>Authentication Strength</strong> — Built-in and custom strengths are
+                resolved at the tier level (MFA, Passwordless, Phishing-resistant). Individual
+                authentication methods (e.g. "user has a FIDO2 key") are not tracked.
               </LimitationItem>
             </ul>
           </Section>
@@ -74,6 +60,19 @@ export function LimitationsDialog({
 
           <Section title="Other notes">
             <ul className="space-y-2 mt-1">
+              <LimitationItem>
+                <strong>Authentication Context</strong> — Static C1/C2/C3 options in the
+                simulator. Live tenants do not yet fetch tenant-defined authentication contexts
+                from Graph API.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Gap Analysis scope</strong> — Sweeps cloud app combinations only. User
+                Actions and Authentication Context dimensions are not included in the sweep.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Service Principal risk</strong> — Workload identity risk conditions
+                (servicePrincipalRiskLevels) are not evaluated.
+              </LimitationItem>
               <LimitationItem>
                 Guest and external user sub-type matching handles common types
                 (b2bCollaborationGuest) but granular tenant-scoped external user conditions may

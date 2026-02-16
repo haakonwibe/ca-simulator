@@ -10,6 +10,7 @@ interface PolicyState {
   policies: ConditionalAccessPolicy[];
   namedLocations: Map<string, NamedLocationInfo>;
   displayNames: Map<string, string>;
+  authStrengthMap: Map<string, number>;
   tenantName: string | null;
   isLoading: boolean;
   error: string | null;
@@ -26,6 +27,7 @@ export const usePolicyStore = create<PolicyState>((set) => ({
   policies: [],
   namedLocations: new Map(),
   displayNames: new Map(),
+  authStrengthMap: new Map(),
   tenantName: null,
   isLoading: false,
   error: null,
@@ -41,7 +43,7 @@ export const usePolicyStore = create<PolicyState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
-      const [{ policies, namedLocations, displayNames }, tenantName] = await Promise.all([
+      const [{ policies, namedLocations, displayNames, authStrengthMap }, tenantName] = await Promise.all([
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
@@ -49,6 +51,7 @@ export const usePolicyStore = create<PolicyState>((set) => ({
         policies,
         namedLocations,
         displayNames,
+        authStrengthMap,
         tenantName,
         isLoading: false,
         dataSource: 'live',
@@ -66,10 +69,13 @@ export const usePolicyStore = create<PolicyState>((set) => ({
     for (const [id, name] of Object.entries(SAMPLE_DISPLAY_NAMES)) {
       displayNames.set(id, name);
     }
+    const sampleAuthStrengthMap = new Map<string, number>();
+    sampleAuthStrengthMap.set('00000000-0000-0000-0000-000000000099', 3); // Phishing-resistant tier
     set({
       policies: SAMPLE_POLICIES,
       namedLocations: new Map(),
       displayNames,
+      authStrengthMap: sampleAuthStrengthMap,
       isLoading: false,
       error: null,
       dataSource: 'sample',
@@ -81,6 +87,7 @@ export const usePolicyStore = create<PolicyState>((set) => ({
       policies: [],
       namedLocations: new Map(),
       displayNames: new Map(),
+      authStrengthMap: new Map(),
       tenantName: null,
       error: null,
       dataSource: 'none',

@@ -18,7 +18,7 @@ function createRiskCondition(overrides?: Partial<RiskCondition>): RiskCondition 
 
 function riskContext(signInRisk: RiskLevel | 'none', userRisk: RiskLevel | 'none') {
   return createTestContext({
-    risk: { signInRiskLevel: signInRisk, userRiskLevel: userRisk },
+    risk: { signInRiskLevel: signInRisk, userRiskLevel: userRisk, insiderRiskLevel: 'none' },
   });
 }
 
@@ -149,7 +149,7 @@ describe('RiskLevelMatcher', () => {
       const result = matcher.evaluate(riskContext('high', 'high'), condition);
 
       expect(result.matches).toBe(true);
-      expect(result.phase).toBe('unconfigured');
+      expect(result.phase).toBe('notConfigured');
     });
 
     it('matches "none" risk when unconfigured', () => {

@@ -117,10 +117,14 @@ function summarizeApps(
   let base: string;
 
   if (a.includeUserActions?.length) {
+    const action = a.includeUserActions[0];
+    if (action.includes('registerSecurityInformation')) return 'Reg SecInfo';
+    if (action.includes('registerDevice')) return 'Reg Device';
     return 'UserAction';
   }
   if (a.includeAuthenticationContextClassReferences?.length) {
-    return 'AuthCtx';
+    const refs = a.includeAuthenticationContextClassReferences;
+    return refs.length === 1 ? `AuthCtx:${refs[0].toUpperCase()}` : `AuthCtx(${refs.length})`;
   }
 
   if (inc.includes('All')) {
@@ -234,6 +238,19 @@ export function getPolicySubtitle(
   displayNames: Map<string, string>,
 ): string | null {
   const { conditions, grantControls } = policy;
+
+  // 0a. User actions
+  if (conditions.applications.includeUserActions?.length) {
+    const action = conditions.applications.includeUserActions[0];
+    if (action.includes('registerSecurityInformation')) return '\u2192 Register security info';
+    if (action.includes('registerDevice')) return '\u2192 Register/join devices';
+    return '\u2192 User action';
+  }
+  // 0b. Authentication context
+  if (conditions.applications.includeAuthenticationContextClassReferences?.length) {
+    const refs = conditions.applications.includeAuthenticationContextClassReferences;
+    return refs.length === 1 ? `\u2192 Auth Context ${refs[0].toUpperCase()}` : `\u2192 Auth Context (${refs.length})`;
+  }
 
   // 1. Specific applications (not "All")
   const apps = conditions.applications.includeApplications;
@@ -410,10 +427,7 @@ export function getCellState(
   }
 
   if (conditionResult.phase === 'exclusion') return 'excluded';
-  if (
-    conditionResult.phase === 'unconfigured' ||
-    conditionResult.phase === 'notConfigured'
-  ) {
+  if (conditionResult.phase === 'notConfigured') {
     return 'notConfigured';
   }
   if (conditionResult.matches) return 'match';
@@ -500,7 +514,7 @@ export function inferCategory(policy: ConditionalAccessPolicy): string {
 
   if (grantControls?.builtInControls?.includes('block')) return 'security';
 
-  if (conditions.signInRiskLevels?.length > 0 || conditions.userRiskLevels?.length > 0)
+  if (conditions.signInRiskLevels?.length > 0 || conditions.userRiskLevels?.length > 0 || conditions.insiderRiskLevels?.length)
     return 'risk';
 
   if (

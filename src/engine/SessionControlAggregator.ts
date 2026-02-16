@@ -1,16 +1,7 @@
 // engine/SessionControlAggregator.ts
 // Merges session controls from all applicable policies. Most-restrictive-wins.
 
-import type { PolicyEvaluationResult, TraceEntry } from './models/EvaluationResult';
-
-export interface AggregatedSessionControls {
-  signInFrequency?: { value: number; type: 'hours' | 'days'; isEnabled: boolean; frequencyInterval: string; source: string };
-  persistentBrowser?: { mode: 'always' | 'never'; isEnabled: boolean; source: string };
-  cloudAppSecurity?: { isEnabled: boolean; cloudAppSecurityType: string; source: string };
-  continuousAccessEvaluation?: { mode: string; source: string };
-  applicationEnforcedRestrictions?: { isEnabled: boolean; source: string };
-  disableResilienceDefaults?: { value: boolean; source: string };
-}
+import type { PolicyEvaluationResult, TraceEntry, AggregatedSessionControls } from './models/EvaluationResult';
 
 /**
  * Converts a sign-in frequency value to hours for comparison.
@@ -41,7 +32,7 @@ export class SessionControlAggregator {
 
       // Sign-in frequency: shortest interval wins
       if (sc.signInFrequency) {
-        const freq = sc.signInFrequency as { value: number; type: 'hours' | 'days' };
+        const freq = sc.signInFrequency;
         const hours = toHours(freq.value, freq.type);
 
         if (hours < currentMinFrequencyHours) {
@@ -62,7 +53,7 @@ export class SessionControlAggregator {
 
       // Persistent browser: 'never' wins over 'always'
       if (sc.persistentBrowser !== undefined) {
-        const mode = sc.persistentBrowser as 'always' | 'never';
+        const mode = sc.persistentBrowser;
         if (!result.persistentBrowser || mode === 'never') {
           result.persistentBrowser = {
             mode,
@@ -76,10 +67,17 @@ export class SessionControlAggregator {
         }
       }
 
-      // Cloud app security: if any policy enables it, it's enabled
+      // Cloud app security: most-restrictive-wins
       if (sc.cloudAppSecurity !== undefined) {
-        const securityType = sc.cloudAppSecurity as string;
-        if (!result.cloudAppSecurity) {
+        const securityType = sc.cloudAppSecurity;
+        const CAS_RESTRICTIVENESS: Record<string, number> = {
+          mcasConfigured: 0,
+          monitorOnly: 1,
+          blockDownloads: 2,
+        };
+        const currentLevel = CAS_RESTRICTIVENESS[result.cloudAppSecurity?.cloudAppSecurityType ?? ''] ?? -1;
+        const newLevel = CAS_RESTRICTIVENESS[securityType] ?? 0;
+        if (!result.cloudAppSecurity || newLevel > currentLevel) {
           result.cloudAppSecurity = {
             isEnabled: true,
             cloudAppSecurityType: securityType,
@@ -94,7 +92,7 @@ export class SessionControlAggregator {
 
       // Continuous access evaluation: most-restrictive-wins
       if (sc.continuousAccessEvaluation !== undefined) {
-        const mode = sc.continuousAccessEvaluation as string;
+        const mode = sc.continuousAccessEvaluation;
         const CAE_RESTRICTIVENESS: Record<string, number> = {
           strictEnforcement: 2,
           strictLocation: 1,
@@ -128,6 +126,18 @@ export class SessionControlAggregator {
             source: policy.policyId,
           };
         }
+      }
+
+      // Token protection (secureSignInSession): any policy enables → enabled
+      if (sc.secureSignInSession && !result.secureSignInSession) {
+        result.secureSignInSession = {
+          isEnabled: true,
+          source: policy.policyId,
+        };
+        trace.push(this.trace(
+          `Token protection (secure sign-in session) enabled from policy "${policy.policyName}"`,
+          policy.policyId,
+        ));
       }
     }
 

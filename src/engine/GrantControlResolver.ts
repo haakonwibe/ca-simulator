@@ -43,6 +43,7 @@ export class GrantControlResolver {
     applicablePolicies: PolicyEvaluationResult[],
     satisfiedControls: SatisfiedControl[],
     authenticationStrengthLevel?: number,
+    customAuthStrengthMap?: ReadonlyMap<string, number>,
   ): GrantResolutionResult {
     const trace: TraceEntry[] = [];
     const satisfied = satisfiedControls.map(String);
@@ -96,7 +97,7 @@ export class GrantControlResolver {
     const allUnsatisfiedSet = new Set<string>();
 
     for (const policy of applicablePolicies) {
-      const breakdown = this.evaluatePolicy(policy, satisfied, authLevel);
+      const breakdown = this.evaluatePolicy(policy, satisfied, authLevel, customAuthStrengthMap);
       policyBreakdown.push(breakdown);
 
       for (const c of breakdown.requiredControls) {
@@ -159,6 +160,7 @@ export class GrantControlResolver {
     policy: PolicyEvaluationResult,
     satisfiedControls: string[],
     authenticationStrengthLevel: number,
+    customAuthStrengthMap?: ReadonlyMap<string, number>,
   ): PolicyBreakdown {
     // Policy with no grant controls (session-only) — automatically satisfied
     if (!policy.grantControls) {
@@ -183,7 +185,7 @@ export class GrantControlResolver {
     let authStrengthSatisfied = true;
     const authStrength = policy.grantControls.authenticationStrength;
     if (authStrength) {
-      authStrengthSatisfied = isAuthStrengthSatisfied(authenticationStrengthLevel, authStrength.policyStrengthId);
+      authStrengthSatisfied = isAuthStrengthSatisfied(authenticationStrengthLevel, authStrength.policyStrengthId, customAuthStrengthMap);
     }
 
     // Determine per-policy satisfaction
@@ -206,7 +208,7 @@ export class GrantControlResolver {
     // Include authenticationStrength in the required/unsatisfied lists
     const requiredControls = [...controls];
     const unsatisfiedResult = [...controlsUnsatisfied];
-    const authStrengthLabel = authStrength ? `authenticationStrength:${authStrength.displayName}` : undefined;
+    const authStrengthLabel = authStrength ? `authenticationStrength:${authStrength.displayName ?? authStrength.policyStrengthId}` : undefined;
     if (authStrengthLabel) {
       requiredControls.push(authStrengthLabel);
       if (authStrengthSatisfied) {

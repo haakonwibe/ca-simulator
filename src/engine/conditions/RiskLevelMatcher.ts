@@ -62,7 +62,7 @@ export class RiskLevelMatcher implements ConditionMatcher<RiskCondition> {
         conditionType: riskType,
         matches: true,
         reason: `${label} condition is unconfigured — matches all risk levels`,
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 
@@ -100,7 +100,7 @@ export class RiskLevelMatcher implements ConditionMatcher<RiskCondition> {
         conditionType: 'risk',
         matches: true,
         reason: 'Risk condition is unconfigured — matches all risk levels',
-        phase: 'unconfigured',
+        phase: 'notConfigured',
       };
     }
 

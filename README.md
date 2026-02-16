@@ -13,17 +13,19 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 
 ## Why
 
-Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 370 unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
+Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 400+ unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
 
 ## Features
 
 - **Four visualization modes** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis)
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
 - **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
-- **8 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow
-- **Authentication strength hierarchy** — built-in strengths (MFA, Passwordless MFA, Phishing-resistant MFA) resolved with hierarchy-aware matching; higher tiers satisfy lower requirements
+- **9 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow
+- **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) based on their allowed combinations
+- **Target resource modes** — simulate against cloud apps, User Actions (security info registration, device registration), or Authentication Contexts (C1–C3)
+- **Session controls in verdict** — aggregated session controls displayed with source policy links, including token protection (secureSignInSession)
 - **Full evaluation trace** — see exactly which condition knocked out each policy
-- **Sample mode** — 13 demo policies and 5 personas, no Azure tenant required
+- **Sample mode** — 19 demo policies and 5 personas covering every engine feature, no Azure tenant required
 - **Live tenant connection** — MSAL + Microsoft Graph API with graceful admin consent handling
 
 ## Quick Start
@@ -61,10 +63,10 @@ To evaluate your own tenant's policies:
 
 The evaluation engine processes each sign-in scenario through a 4-phase pipeline:
 
-1. **Signal Collection** — capture the simulation context (user, app, device, platform, location, risk level, client app type, authentication strength level, satisfied controls)
-2. **Policy Matching** — evaluate each enabled policy's conditions using 8 independent matchers. Conditions are AND'd together; a policy applies only if all configured conditions match. Unconfigured conditions default to match-all.
-3. **Grant Resolution** — resolve grant controls per-policy first (respecting each policy's AND/OR operator), then cross-policy AND: every applicable policy must be independently satisfied. Block in any policy always wins.
-4. **Session Control Aggregation** — merge session controls from all applicable policies using most-restrictive-wins rules
+1. **Signal Collection** — capture the simulation context (user, app, device, platform, location, risk levels, insider risk, client app type, authentication strength level, custom auth strength map, satisfied controls)
+2. **Policy Matching** — evaluate each enabled policy's conditions using 9 independent matchers. Conditions are AND'd together; a policy applies only if all configured conditions match. Unconfigured conditions default to match-all.
+3. **Grant Resolution** — resolve grant controls per-policy first (respecting each policy's AND/OR operator), then cross-policy AND: every applicable policy must be independently satisfied. Block in any policy always wins. Custom authentication strengths are resolved via the tenant's auth strength policies.
+4. **Session Control Aggregation** — merge session controls from all applicable policies using most-restrictive-wins rules. Includes sign-in frequency, persistent browser, cloud app security, continuous access evaluation, app-enforced restrictions, resilience defaults, and token protection.
 
 Every step produces a trace entry, giving full visibility into why each policy was applied, skipped, or report-only.
 
@@ -82,7 +84,7 @@ Every step produces a trace entry, giving full visibility into why each policy w
 
 ```
 Engine Layer       Pure TypeScript, zero dependencies, fully testable in isolation
-                   8 condition matchers, 4-phase evaluation pipeline, 370 unit tests
+                   9 condition matchers, 4-phase evaluation pipeline, 400+ unit tests
 
 Data Layer         MSAL authentication, Graph API policy fetch + pagination
                    Batch GUID resolution, named location lookup, persona search
@@ -101,7 +103,7 @@ The engine is a standalone TypeScript module with no knowledge of React, the DOM
 
 ```bash
 npm run dev          # Vite dev server with HMR
-npm test             # Run all 370 engine tests
+npm test             # Run all 400+ engine tests
 npm run test:watch   # Watch mode
 npm run build        # Production build
 ```
@@ -112,7 +114,7 @@ Run a single test file:
 npx vitest run src/engine/__tests__/conditions/UserConditionMatcher.test.ts
 ```
 
-The engine is tested independently of the UI. Each of the 8 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, full engine, and gap analysis.
+The engine is tested independently of the UI. Each of the 9 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, and gap analysis.
 
 The `/privacy` and `/terms` routes rely on Vercel's clean URL rewrites. Locally, use `/privacy/index.html` and `/terms/index.html` instead.
 

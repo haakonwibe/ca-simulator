@@ -21,8 +21,10 @@ import type {
   PolicyState,
   AuthenticationFlowCondition,
   AuthenticationFlowTransferMethod,
+  InsiderRiskLevel,
 } from '../engine/models/Policy';
-import { graphFetch, graphPost, fetchAllPages } from './graphClient';
+import { graphFetch, graphPost, fetchAllPages, GraphPermissionError } from './graphClient';
+import { resolveCustomAuthStrengthTier, AUTH_STRENGTH_HIERARCHY } from '../engine/authenticationStrength';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -154,7 +156,8 @@ async function resolveAppNames(token: string, appIds: string[]): Promise<Map<str
       if (result.value.length > 0) {
         map.set(appId, result.value[0].displayName);
       }
-    } catch {
+    } catch (error) {
+      if (error instanceof GraphPermissionError) throw error;
       // If we can't resolve, leave it out — the UI will show the raw GUID
     }
   }
@@ -431,6 +434,14 @@ function normalizeSessionControls(raw: Record<string, unknown> | null | undefine
     hasAny = true;
   }
 
+  if (raw.secureSignInSession) {
+    const sss = raw.secureSignInSession as Record<string, unknown>;
+    if (sss.isEnabled) {
+      result.secureSignInSession = { isEnabled: true };
+      hasAny = true;
+    }
+  }
+
   return hasAny ? result : null;
 }
 
@@ -454,6 +465,7 @@ function normalizePolicies(
       devices: normalizeDeviceFilter(cond.devices),
       authenticationFlows: normalizeAuthenticationFlows(cond.authenticationFlows),
       servicePrincipalRiskLevels: (cond.servicePrincipalRiskLevels as RiskLevel[]) ?? undefined,
+      insiderRiskLevels: (cond.insiderRiskLevels as InsiderRiskLevel[]) ?? undefined,
     };
 
     return {
@@ -483,27 +495,51 @@ export async function fetchTenantName(token: string): Promise<string | null> {
   }
 }
 
-// ── 8. Top-Level Orchestrator ───────────────────────────────────────
+// ── 8. Authentication Strength Policies ─────────────────────────────
+
+async function fetchAuthStrengthPolicies(token: string): Promise<Map<string, number>> {
+  const raw = await fetchAllPages<{ id: string; allowedCombinations: string[] }>(
+    '/identity/conditionalAccess/authenticationStrength/policies',
+    token,
+  );
+  const map = new Map<string, number>();
+  for (const policy of raw) {
+    if (AUTH_STRENGTH_HIERARCHY.has(policy.id)) continue; // Skip built-ins
+    map.set(policy.id, resolveCustomAuthStrengthTier(policy.allowedCombinations));
+  }
+  return map;
+}
+
+// ── 9. Top-Level Orchestrator ───────────────────────────────────────
 
 export async function loadPoliciesFromGraph(token: string): Promise<{
   policies: ConditionalAccessPolicy[];
   namedLocations: Map<string, NamedLocationInfo>;
   displayNames: Map<string, string>;
+  authStrengthMap: Map<string, number>;
 }> {
-  // Fetch policies and named locations in parallel
-  const [rawPolicies, namedLocations] = await Promise.all([
+  // Fetch policies, named locations, and auth strength policies in parallel
+  const [rawPolicies, namedLocations, authStrengthMap] = await Promise.all([
     fetchPolicies(token),
     fetchNamedLocations(token),
+    fetchAuthStrengthPolicies(token).catch(() => new Map<string, number>()),
   ]);
 
   // Extract all referenced GUIDs
   const { directoryObjectIds, appIds } = extractReferencedIds(rawPolicies);
 
-  // Resolve GUIDs in parallel
-  const [directoryObjectNames, appNames] = await Promise.all([
-    resolveDirectoryObjects(token, directoryObjectIds),
-    resolveAppNames(token, appIds),
-  ]);
+  // Resolve GUIDs in parallel — re-throw 403 so the store can show ConsentBanner
+  let directoryObjectNames = new Map<string, string>();
+  let appNames = new Map<string, string>();
+  try {
+    [directoryObjectNames, appNames] = await Promise.all([
+      resolveDirectoryObjects(token, directoryObjectIds),
+      resolveAppNames(token, appIds),
+    ]);
+  } catch (error) {
+    if (error instanceof GraphPermissionError) throw error;
+    // Non-permission errors: proceed with empty display names
+  }
 
   // Merge all display names into one map for the UI
   const displayNames = new Map<string, string>();
@@ -515,5 +551,5 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   // Normalize raw Graph data into engine-ready policies
   const policies = normalizePolicies(rawPolicies, directoryObjectNames, appNames, namedLocations);
 
-  return { policies, namedLocations, displayNames };
+  return { policies, namedLocations, displayNames, authStrengthMap };
 }

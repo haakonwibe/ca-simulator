@@ -13,6 +13,7 @@ export type {
   DeviceFilterCondition,
   ClientAppType,
   RiskLevel,
+  InsiderRiskLevel,
   GrantControls,
   BuiltInControl,
   SessionControls,
@@ -29,6 +30,8 @@ export type {
 } from './SimulationContext';
 
 export type {
+  ExtractedSessionControls,
+  AggregatedSessionControls,
   ConditionMatchResult,
   PolicyEvaluationResult,
   CAEngineResult,

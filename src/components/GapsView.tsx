@@ -362,6 +362,7 @@ function GapRow({
       {/* Collapsed: single-line summary */}
       <button
         onClick={onToggle}
+        aria-expanded={expanded}
         className="flex w-full items-center gap-2 px-4 py-2.5 text-left transition-colors hover:bg-accent/10"
       >
         <ChevronRight
@@ -475,7 +476,7 @@ function SummaryBar({ groups, filterLabel, onClearFilter }: {
       {filterLabel && (
         <span className="flex items-center gap-1 text-xs" style={{ color: COLORS.accent }}>
           Showing {filterLabel}
-          <button onClick={onClearFilter} className="hover:text-foreground" title="Show all personas">
+          <button onClick={onClearFilter} className="hover:text-foreground" title="Show all personas" aria-label="Show all personas">
             <X className="h-3 w-3" />
           </button>
           <span style={{ color: COLORS.textDim }}>&middot;</span>

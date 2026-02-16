@@ -286,6 +286,7 @@ export function analyzeGaps(
                   risk: {
                     signInRiskLevel: signInRisk,
                     userRiskLevel: userRisk,
+                    insiderRiskLevel: 'none',
                   },
                   clientAppType: clientApp,
                   authenticationFlow: 'none',

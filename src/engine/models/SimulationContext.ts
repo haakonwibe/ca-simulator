@@ -1,6 +1,6 @@
 // engine/models/SimulationContext.ts
 
-import type { ClientAppType, DevicePlatform, RiskLevel } from './Policy';
+import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from './Policy';
 
 export interface SimulationContext {
   user: UserContext;
@@ -13,6 +13,8 @@ export interface SimulationContext {
   authenticationFlow?: 'none' | 'deviceCodeFlow' | 'authenticationTransfer';
   /** Authentication strength level: 0=none, 1=MFA, 2=Passwordless MFA, 3=Phishing-resistant MFA */
   authenticationStrengthLevel?: number;
+  /** Resolved custom authentication strength ID → tier level (1-3) */
+  customAuthStrengthMap?: ReadonlyMap<string, number>;
   /** Controls the user has already satisfied (for grant resolution) */
   satisfiedControls: SatisfiedControl[];
 }
@@ -57,6 +59,7 @@ export interface LocationContext {
 export interface RiskContext {
   signInRiskLevel: RiskLevel | 'none';
   userRiskLevel: RiskLevel | 'none';
+  insiderRiskLevel: InsiderRiskLevel | 'none';
 }
 
 export type SatisfiedControl =

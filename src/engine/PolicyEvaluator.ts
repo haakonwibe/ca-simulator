@@ -3,7 +3,7 @@
 
 import type { ConditionalAccessPolicy, GrantControls, SessionControls } from './models/Policy';
 import type { SimulationContext } from './models/SimulationContext';
-import type { PolicyEvaluationResult, ConditionMatchResult } from './models/EvaluationResult';
+import type { PolicyEvaluationResult, ConditionMatchResult, ExtractedSessionControls } from './models/EvaluationResult';
 import { UserConditionMatcher } from './conditions/UserConditionMatcher';
 import { ApplicationConditionMatcher } from './conditions/ApplicationConditionMatcher';
 import { DevicePlatformMatcher } from './conditions/DevicePlatformMatcher';
@@ -12,6 +12,7 @@ import { ClientAppMatcher } from './conditions/ClientAppMatcher';
 import { RiskLevelMatcher } from './conditions/RiskLevelMatcher';
 import { DeviceFilterMatcher } from './conditions/DeviceFilterMatcher';
 import { AuthenticationFlowMatcher } from './conditions/AuthenticationFlowMatcher';
+import { InsiderRiskMatcher } from './conditions/InsiderRiskMatcher';
 import { isAuthStrengthSatisfied } from './authenticationStrength';
 
 /**
@@ -33,6 +34,7 @@ export class PolicyEvaluator {
   private readonly riskMatcher = new RiskLevelMatcher();
   private readonly deviceFilterMatcher = new DeviceFilterMatcher();
   private readonly authenticationFlowMatcher = new AuthenticationFlowMatcher();
+  private readonly insiderRiskMatcher = new InsiderRiskMatcher();
 
   evaluate(policy: ConditionalAccessPolicy, context: SimulationContext): PolicyEvaluationResult {
     // Skip disabled policies early (Hard-Won Lesson #3)
@@ -117,6 +119,15 @@ export class PolicyEvaluator {
       }
     }
 
+    // 9. Insider risk levels (optional — unconfigured = matches all)
+    if (conditions.insiderRiskLevels?.length) {
+      const insiderRiskResult = this.safeEvaluate('insiderRisk', () => this.insiderRiskMatcher.evaluate(context, conditions.insiderRiskLevels!));
+      conditionResults.push(insiderRiskResult);
+      if (!insiderRiskResult.matches) {
+        return this.buildResult(policy, false, conditionResults);
+      }
+    }
+
     // All conditions matched — evaluate grant controls and session controls
     const result = this.buildResult(policy, true, conditionResults);
 
@@ -178,7 +189,7 @@ export class PolicyEvaluator {
     let authStrengthResult: { displayName: string; policyStrengthId: string; satisfied: boolean } | undefined;
     if (grantControls.authenticationStrength) {
       const userLevel = context.authenticationStrengthLevel ?? 0;
-      const authSatisfied = isAuthStrengthSatisfied(userLevel, grantControls.authenticationStrength.id);
+      const authSatisfied = isAuthStrengthSatisfied(userLevel, grantControls.authenticationStrength.id, context.customAuthStrengthMap);
       authStrengthResult = {
         displayName: grantControls.authenticationStrength.displayName ?? grantControls.authenticationStrength.id,
         policyStrengthId: grantControls.authenticationStrength.id,
@@ -211,8 +222,8 @@ export class PolicyEvaluator {
     };
   }
 
-  private extractSessionControls(sessionControls: SessionControls): Record<string, unknown> {
-    const result: Record<string, unknown> = {};
+  private extractSessionControls(sessionControls: SessionControls): ExtractedSessionControls {
+    const result: ExtractedSessionControls = {};
 
     if (sessionControls.applicationEnforcedRestrictions?.isEnabled) {
       result.applicationEnforcedRestrictions = true;
@@ -234,6 +245,9 @@ export class PolicyEvaluator {
     }
     if (sessionControls.disableResilienceDefaults !== undefined) {
       result.disableResilienceDefaults = sessionControls.disableResilienceDefaults;
+    }
+    if (sessionControls.secureSignInSession?.isEnabled) {
+      result.secureSignInSession = true;
     }
 
     return result;

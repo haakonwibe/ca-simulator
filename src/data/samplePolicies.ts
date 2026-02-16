@@ -407,6 +407,197 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
     },
     sessionControls: null,
   },
+
+  // 14. Block access for elevated insider risk
+  {
+    id: 'ca-policy-014-block-elevated-insider-risk',
+    displayName: 'CA014: Block access for elevated insider risk',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['All'],
+        excludeApplications: [],
+      },
+      clientAppTypes: [],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+      insiderRiskLevels: ['elevated'],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['block'],
+    },
+    sessionControls: null,
+  },
+
+  // 15. Require MFA for security info registration (User Action targeting)
+  {
+    id: 'ca-policy-015-mfa-security-info-registration',
+    displayName: 'CA015: Require MFA for security info registration',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: [],
+        excludeApplications: [],
+        includeUserActions: ['urn:user:registerSecurityInformation'],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['mfa'],
+    },
+    sessionControls: null,
+  },
+
+  // 16. Require compliant device for high-security auth context
+  {
+    id: 'ca-policy-016-compliant-device-auth-context',
+    displayName: 'CA016: Require compliant device for high-security context',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: [],
+        excludeApplications: [],
+        includeAuthenticationContextClassReferences: ['c1'],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'AND',
+      builtInControls: ['compliantDevice'],
+    },
+    sessionControls: null,
+  },
+
+  // 17. Custom auth strength for admin portals (Phishing-resistant keys only)
+  {
+    id: 'ca-policy-017-custom-auth-strength-admin-portals',
+    displayName: 'CA017: Phishing-resistant keys for admin portals',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['MicrosoftAdminPortals'],
+        excludeApplications: [],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: [],
+      authenticationStrength: { id: '00000000-0000-0000-0000-000000000099', displayName: 'Phishing-resistant (Keys only)' },
+    },
+    sessionControls: null,
+  },
+
+  // 18. Token protection for Office 365 on Windows
+  {
+    id: 'ca-policy-018-token-protection-office365-windows',
+    displayName: 'CA018: Token protection for Office 365 (Windows)',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['Office365'],
+        excludeApplications: [],
+      },
+      platforms: {
+        includePlatforms: ['windows'],
+        excludePlatforms: [],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['mfa'],
+    },
+    sessionControls: {
+      secureSignInSession: { isEnabled: true },
+    },
+  },
+
+  // 19. Session controls for untrusted locations
+  {
+    id: 'ca-policy-019-session-controls-untrusted',
+    displayName: 'CA019: Session controls for untrusted locations',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['All'],
+        excludeApplications: [],
+      },
+      locations: {
+        includeLocations: ['All'],
+        excludeLocations: ['AllTrusted'],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['mfa'],
+    },
+    sessionControls: {
+      signInFrequency: { isEnabled: true, value: 4, type: 'hours', frequencyInterval: 'timeBased' },
+      persistentBrowser: { isEnabled: true, mode: 'never' },
+    },
+  },
 ];
 
 /** Display names for GUIDs referenced in sample policies. */

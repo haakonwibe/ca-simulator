@@ -17,7 +17,7 @@ export function AppLayout() {
         className="shrink-0 text-center text-xs py-1 border-t"
         style={{ color: COLORS.textDim, borderColor: COLORS.border }}
       >
-        v0.3 beta · Built by{' '}
+        v0.3.3 beta · Built by{' '}
         <a
           href="https://x.com/haakonwibe"
           target="_blank"

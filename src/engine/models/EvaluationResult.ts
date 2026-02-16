@@ -2,12 +2,34 @@
 
 import type { PolicyState } from './Policy';
 
+/** Shape produced by PolicyEvaluator.extractSessionControls() — typed boundary between extraction and aggregation. */
+export interface ExtractedSessionControls {
+  signInFrequency?: { value: number; type: 'hours' | 'days' };
+  persistentBrowser?: 'always' | 'never';
+  cloudAppSecurity?: string;
+  continuousAccessEvaluation?: string;
+  applicationEnforcedRestrictions?: boolean;
+  disableResilienceDefaults?: boolean;
+  secureSignInSession?: boolean;
+}
+
+/** Output of SessionControlAggregator — most-restrictive-wins merging with source tracking. */
+export interface AggregatedSessionControls {
+  signInFrequency?: { value: number; type: 'hours' | 'days'; isEnabled: boolean; frequencyInterval: string; source: string };
+  persistentBrowser?: { mode: 'always' | 'never'; isEnabled: boolean; source: string };
+  cloudAppSecurity?: { isEnabled: boolean; cloudAppSecurityType: string; source: string };
+  continuousAccessEvaluation?: { mode: string; source: string };
+  applicationEnforcedRestrictions?: { isEnabled: boolean; source: string };
+  disableResilienceDefaults?: { value: boolean; source: string };
+  secureSignInSession?: { isEnabled: boolean; source: string };
+}
+
 export interface ConditionMatchResult {
   conditionType: string;
   matches: boolean;
   reason: string;
   /** Which phase decided: inclusion matched, exclusion overrode, or unconfigured (default match) */
-  phase: 'inclusion' | 'exclusion' | 'unconfigured' | 'notConfigured';
+  phase: 'inclusion' | 'exclusion' | 'notConfigured';
   details?: Record<string, unknown>;
 }
 
@@ -29,7 +51,7 @@ export interface PolicyEvaluationResult {
       satisfied: boolean;
     };
   };
-  sessionControls?: Record<string, unknown>;
+  sessionControls?: ExtractedSessionControls;
 }
 
 export interface CAEngineResult {
@@ -39,7 +61,7 @@ export interface CAEngineResult {
   appliedPolicies: PolicyEvaluationResult[];
   skippedPolicies: PolicyEvaluationResult[];
   reportOnlyPolicies: PolicyEvaluationResult[];
-  sessionControls: Record<string, unknown>;
+  sessionControls: AggregatedSessionControls;
   trace: TraceEntry[];
 }
 

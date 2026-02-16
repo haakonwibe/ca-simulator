@@ -2,14 +2,14 @@
 
 import { describe, it, expect } from 'vitest';
 import { SessionControlAggregator } from '../SessionControlAggregator';
-import type { PolicyEvaluationResult } from '../models/EvaluationResult';
+import type { PolicyEvaluationResult, ExtractedSessionControls } from '../models/EvaluationResult';
 
 const aggregator = new SessionControlAggregator();
 
 function policyWithSession(
   id: string,
   name: string,
-  sessionControls?: Record<string, unknown>,
+  sessionControls?: ExtractedSessionControls,
 ): PolicyEvaluationResult {
   return {
     policyId: id,
@@ -177,6 +177,18 @@ describe('SessionControlAggregator', () => {
       expect(sessionControls.cloudAppSecurity?.cloudAppSecurityType).toBe('mcasConfigured');
       expect(sessionControls.cloudAppSecurity?.source).toBe('p1');
     });
+
+    it('most restrictive type wins (blockDownloads > mcasConfigured)', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { cloudAppSecurity: 'mcasConfigured' }),
+        policyWithSession('p2', 'P2', { cloudAppSecurity: 'blockDownloads' }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.cloudAppSecurity?.cloudAppSecurityType).toBe('blockDownloads');
+      expect(sessionControls.cloudAppSecurity?.source).toBe('p2');
+    });
   });
 
   // ──────────────────────────────────────────────
@@ -208,6 +220,45 @@ describe('SessionControlAggregator', () => {
       const { sessionControls } = aggregator.aggregate(policies);
 
       expect(sessionControls.signInFrequency?.source).toBe('freq-short');
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  // Token protection (secureSignInSession)
+  // ──────────────────────────────────────────────
+  describe('token protection (secureSignInSession)', () => {
+    it('single policy with token protection → aggregated result includes it', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { secureSignInSession: true }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.secureSignInSession?.isEnabled).toBe(true);
+      expect(sessionControls.secureSignInSession?.source).toBe('p1');
+    });
+
+    it('multiple policies, one with token protection → present in result', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours' } }),
+        policyWithSession('p2', 'P2', { secureSignInSession: true }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.secureSignInSession?.isEnabled).toBe(true);
+      expect(sessionControls.secureSignInSession?.source).toBe('p2');
+      expect(sessionControls.signInFrequency).toBeDefined();
+    });
+
+    it('no policies with token protection → not in result', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 8, type: 'hours' } }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.secureSignInSession).toBeUndefined();
     });
   });
 

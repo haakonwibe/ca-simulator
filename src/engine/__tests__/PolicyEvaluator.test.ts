@@ -160,7 +160,7 @@ describe('PolicyEvaluator', () => {
 
     it('returns applies: false when risk level fails', () => {
       const ctx = createTestContext({
-        risk: { signInRiskLevel: 'low', userRiskLevel: 'none' },
+        risk: { signInRiskLevel: 'low', userRiskLevel: 'none', insiderRiskLevel: 'none' },
       });
       const policy = createPolicy({
         conditions: createBaseConditions({
@@ -408,7 +408,7 @@ describe('PolicyEvaluator', () => {
       expect(result.applies).toBe(true);
       const clientAppResult = result.conditionResults.find((r) => r.conditionType === 'clientAppTypes');
       expect(clientAppResult?.matches).toBe(true);
-      expect(clientAppResult?.phase).toBe('unconfigured');
+      expect(clientAppResult?.phase).toBe('notConfigured');
     });
 
     it('empty risk levels match all', () => {
@@ -423,7 +423,7 @@ describe('PolicyEvaluator', () => {
       expect(result.applies).toBe(true);
       const riskResult = result.conditionResults.find((r) => r.conditionType === 'risk');
       expect(riskResult?.matches).toBe(true);
-      expect(riskResult?.phase).toBe('unconfigured');
+      expect(riskResult?.phase).toBe('notConfigured');
     });
   });
 
@@ -464,6 +464,17 @@ describe('PolicyEvaluator', () => {
       const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
 
       expect(result.sessionControls).toBeUndefined();
+    });
+
+    it('extracts secureSignInSession when enabled', () => {
+      const policy = createPolicy({
+        sessionControls: {
+          secureSignInSession: { isEnabled: true },
+        },
+      });
+      const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
+
+      expect(result.sessionControls?.secureSignInSession).toBe(true);
     });
   });
 

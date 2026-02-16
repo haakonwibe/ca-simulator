@@ -24,7 +24,7 @@ export function ConsentBanner() {
         device: {},
         location: {},
         clientAppType: 'browser',
-        risk: { signInRiskLevel: 'none', userRiskLevel: 'none' },
+        risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none' },
         satisfiedControls: [],
       };
       useEvaluationStore.getState().evaluate(policies, context);

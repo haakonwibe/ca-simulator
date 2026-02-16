@@ -24,6 +24,7 @@ import {
   XCircle,
   Minus,
   Zap,
+  Timer,
 } from 'lucide-react';
 
 // ── Verdict config ──────────────────────────────────────────────────
@@ -60,10 +61,12 @@ const VERDICT_CONFIG = {
 export function ResultsSummary() {
   const result = useEvaluationStore((s) => s.result);
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
+  const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
 
   // Lifted expansion state
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
   const [reportOnlyOpen, setReportOnlyOpen] = useState(false);
+  const [sessionOpen, setSessionOpen] = useState(false);
   const [skippedOpen, setSkippedOpen] = useState(false);
 
   const toggleCard = (policyId: string) => {
@@ -128,6 +131,12 @@ export function ResultsSummary() {
         expandedCards={expandedCards}
         onToggleCard={toggleCard}
         selectedPolicyId={selectedPolicyId}
+      />
+      <SessionControlsSection
+        result={result}
+        open={sessionOpen}
+        onToggle={() => setSessionOpen(!sessionOpen)}
+        onSelectPolicy={setSelectedPolicyId}
       />
       <SkippedSection
         policies={result.skippedPolicies}
@@ -329,6 +338,7 @@ function PolicyCard({
     >
       <button
         onClick={onToggle}
+        aria-expanded={expanded}
         className="flex w-full items-center justify-between px-3 py-2.5 text-left hover:bg-accent/30 transition-colors"
       >
         <div className="flex items-center gap-2 min-w-0">
@@ -481,7 +491,7 @@ function ConditionRow({ condition }: { condition: ConditionMatchResult }) {
               color:
                 condition.phase === 'exclusion'
                   ? COLORS.blocked
-                  : condition.phase === 'unconfigured' || condition.phase === 'notConfigured'
+                  : condition.phase === 'notConfigured'
                     ? COLORS.textDim
                     : COLORS.textMuted,
             }}
@@ -520,6 +530,7 @@ function ReportOnlySection({
     <div>
       <button
         onClick={onToggle}
+        aria-expanded={open}
         className="flex w-full items-center gap-2 py-1 text-left"
       >
         {open ? (
@@ -559,6 +570,124 @@ function ReportOnlySection({
   );
 }
 
+// ── Session controls section ────────────────────────────────────────
+
+function SessionControlsSection({
+  result,
+  open,
+  onToggle,
+  onSelectPolicy,
+}: {
+  result: CAEngineResult;
+  open: boolean;
+  onToggle: () => void;
+  onSelectPolicy: (id: string | null) => void;
+}) {
+  const sc = result.sessionControls;
+  const entries: { label: string; source: string }[] = [];
+
+  if (sc.signInFrequency) {
+    const freq = sc.signInFrequency;
+    const unit = freq.type === 'hours'
+      ? (freq.value === 1 ? 'hour' : 'hours')
+      : (freq.value === 1 ? 'day' : 'days');
+    entries.push({
+      label: `Sign-in every ${freq.value} ${unit}`,
+      source: freq.source,
+    });
+  }
+  if (sc.persistentBrowser) {
+    entries.push({
+      label: `Persistent browser: ${sc.persistentBrowser.mode}`,
+      source: sc.persistentBrowser.source,
+    });
+  }
+  if (sc.cloudAppSecurity) {
+    entries.push({
+      label: `Cloud app security: ${sc.cloudAppSecurity.cloudAppSecurityType}`,
+      source: sc.cloudAppSecurity.source,
+    });
+  }
+  if (sc.continuousAccessEvaluation) {
+    entries.push({
+      label: `Continuous access evaluation: ${sc.continuousAccessEvaluation.mode}`,
+      source: sc.continuousAccessEvaluation.source,
+    });
+  }
+  if (sc.applicationEnforcedRestrictions) {
+    entries.push({
+      label: 'App-enforced restrictions: enabled',
+      source: sc.applicationEnforcedRestrictions.source,
+    });
+  }
+  if (sc.disableResilienceDefaults) {
+    entries.push({
+      label: 'Resilience defaults: disabled',
+      source: sc.disableResilienceDefaults.source,
+    });
+  }
+  if (sc.secureSignInSession) {
+    entries.push({
+      label: 'Token protection: enabled',
+      source: sc.secureSignInSession.source,
+    });
+  }
+
+  if (entries.length === 0) return null;
+
+  // Build policy ID → display name map for source labels
+  const policyNameMap = new Map<string, string>();
+  for (const p of [...result.appliedPolicies, ...result.reportOnlyPolicies]) {
+    policyNameMap.set(p.policyId, p.policyName);
+  }
+
+  return (
+    <div>
+      <button
+        onClick={onToggle}
+        aria-expanded={open}
+        className="flex w-full items-center gap-2 py-1 text-left"
+      >
+        {open ? (
+          <ChevronDown className="h-3.5 w-3.5" style={{ color: COLORS.session }} />
+        ) : (
+          <ChevronRight className="h-3.5 w-3.5" style={{ color: COLORS.session }} />
+        )}
+        <span className="flex items-center gap-2">
+          <Timer className="h-3.5 w-3.5" style={{ color: COLORS.session }} />
+          <span
+            className="text-xs font-semibold uppercase tracking-wider"
+            style={{ color: COLORS.session }}
+          >
+            Session Controls ({entries.length})
+          </span>
+        </span>
+      </button>
+
+      <div
+        className="overflow-hidden transition-all duration-200 ease-in-out"
+        style={{ maxHeight: open ? '5000px' : '0px' }}
+      >
+        <div className="mt-2 space-y-1.5 rounded-md border px-3 py-2.5" style={{ borderColor: COLORS.session + '40' }}>
+          {entries.map((entry) => (
+            <div key={entry.label} className="flex items-center justify-between text-xs">
+              <span className="font-mono text-[11px]" style={{ color: COLORS.session }}>
+                {entry.label}
+              </span>
+              <button
+                className="ml-2 shrink-0 text-[10px] text-muted-foreground hover:underline"
+                onClick={() => onSelectPolicy(entry.source)}
+              >
+                {policyNameMap.get(entry.source) ?? entry.source}
+              </button>
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 // ── Skipped section ─────────────────────────────────────────────────
 
 function SkippedSection({
@@ -578,6 +707,7 @@ function SkippedSection({
     <div>
       <button
         onClick={onToggle}
+        aria-expanded={open}
         className="flex w-full items-center gap-2 py-1 text-left"
       >
         {open ? (
