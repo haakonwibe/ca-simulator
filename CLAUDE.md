@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-A Microsoft Entra ID Conditional Access policy simulator. Pure TypeScript evaluation engine with React visualization. Evaluates sign-in scenarios against CA policies with four visualization modes (Grid, Matrix, Sankey Flow, Gaps) and automated gap analysis. Supports both sample data (13 demo policies, 5 personas) and live tenant connection via MSAL + Microsoft Graph API.
+A Microsoft Entra ID Conditional Access policy simulator. Pure TypeScript evaluation engine with React visualization. Evaluates sign-in scenarios against CA policies with five visualization modes (Grid, Matrix, Sankey Flow, Gaps, Impact) and automated gap/impact analysis. Supports both sample data (21 demo policies, 5 personas) and live tenant connection via MSAL + Microsoft Graph API.
 
 ## Commands
 
@@ -71,10 +71,11 @@ Auth handled by MSAL's `MsalProvider` + `useMsal()` hook (no separate store). Sc
 - **Matrix** (`matrix/EvaluationMatrix.tsx`) — Diagnostic heatmap, conditions as columns, knockout highlighting
 - **Flow** (`sankey/SankeyFunnel.tsx`) — D3 Sankey diagram, 6 evaluation stages
 - **Gaps** (`GapsView.tsx`) — Brute-force coverage gap analysis across all scenario combinations
+- **Impact** (`ImpactView.tsx`) — Per-policy removal impact analysis with posture scoring
 
 ### Data Layer (`src/services/`)
 
-- `graphService.ts` — Single translation point from raw Graph API → engine models. Handles pagination, batch GUID resolution, named location fetching.
+- `graphService.ts` — Single translation point from raw Graph API → engine models. Handles pagination, batch GUID resolution, named location fetching, full tenant app discovery (enterprise apps + app registrations).
 - `personaService.ts` — User search + transitive group/role membership resolution
 - `auth.ts` — MSAL instance creation + token acquisition
 
@@ -92,7 +93,7 @@ Auth handled by MSAL's `MsalProvider` + `useMsal()` hook (no separate store). Sc
 
 ## Testing
 
-All 370 tests are in `src/engine/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, and gap analysis. Tests use real policy structures and contexts — no mocking of the engine.
+All 459 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, and `src/services/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, and impact analysis. Tests use real policy structures and contexts — no mocking of the engine.
 
 ## Environment
 
