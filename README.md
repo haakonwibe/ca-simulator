@@ -17,10 +17,14 @@ Microsoft's built-in What If tool evaluates one scenario at a time with no visua
 
 ## Features
 
-- **Four visualization modes** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis)
+- **Five visualization modes** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal analysis)
+- **Impact analysis** — "What if I disabled this policy?" Remove each enabled policy and re-evaluate all 5,760 scenario combinations. Policies classified as Critical/High/Medium/Low severity based on verdict changes, control loss, and fallback existence
+- **Weighted security posture score** — each scenario scored 0–10 based on enforced controls; see how your posture changes when a policy is removed
+- **Contextual fallback analysis** — when disabling a policy creates a gap, see which other policies still provide protection, what remains, and what is lost
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
 - **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
 - **9 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow
+- **Full tenant app discovery** — application dropdown shows all enterprise applications and app registrations from your tenant, not just apps referenced in policies
 - **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) based on their allowed combinations
 - **Target resource modes** — simulate against cloud apps, User Actions (security info registration, device registration), or Authentication Contexts (C1–C3)
 - **Session controls in verdict** — aggregated session controls displayed with source policy links, including token protection (secureSignInSession)
@@ -78,7 +82,9 @@ Every step produces a trace entry, giving full visibility into why each policy w
 
 **Flow** — Sankey diagram showing how policies funnel through six evaluation stages (All → State → Users → Apps → Other → Verdict). Policies exit the funnel at the stage where they fail. Report-only policies flow on a parallel track.
 
-**Gaps** — Automated coverage gap analysis. Sweeps all combinations of platform, client app, location, and risk level to find unprotected scenarios. Classifies findings by severity (critical/warning/caution/info) and gap type (no-policy, no-MFA, no-device-compliance, legacy-auth). Supports generic personas, selected users, or guided 5-slot persona mapping.
+**Gaps** — Automated coverage gap analysis. Sweeps all combinations of platform, client app, location, and risk level to find unprotected scenarios. Classifies findings by severity (critical/warning/caution/info) and gap type (no-policy, no-MFA, no-device-compliance, legacy-auth). Supports generic personas, selected users, or guided 5-slot persona mapping. Uses full-width layout with inline user picker.
+
+**Impact** — Policy removal impact analysis. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations to measure the effect. Shows a weighted security posture score, affected user breakdown (red/green pills by user type), contextual fallback analysis identifying which other policies still cover the gap, and "other protection active" cards. Policies are classified as Critical, High, Medium, or Low severity.
 
 ## Architecture
 
@@ -94,7 +100,7 @@ State Layer        Zustand stores: policies, evaluation results, persona cache
                    Mode-agnostic — engine receives identical types from sample or live data
 
 Visualization      React 18, Shadcn/UI + Tailwind CSS v4, D3 Sankey diagram
-                   CSS Grid tiles, HTML heatmap table, gap analysis UI
+                   CSS Grid tiles, HTML heatmap table, gap analysis UI, impact analysis UI
 ```
 
 The engine is a standalone TypeScript module with no knowledge of React, the DOM, or Microsoft Graph. It takes policy data and a simulation context as input and produces structured evaluation results with a full trace as output.
@@ -114,7 +120,7 @@ Run a single test file:
 npx vitest run src/engine/__tests__/conditions/UserConditionMatcher.test.ts
 ```
 
-The engine is tested independently of the UI. Each of the 9 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, and gap analysis.
+The engine is tested independently of the UI. Each of the 9 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, gap analysis, and impact analysis.
 
 The `/privacy` and `/terms` routes rely on Vercel's clean URL rewrites. Locally, use `/privacy/index.html` and `/terms/index.html` instead.
 
