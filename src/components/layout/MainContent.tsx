@@ -1,6 +1,6 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { LayoutGrid, List, GitBranch, ShieldAlert } from 'lucide-react';
+import { LayoutGrid, List, GitBranch, ShieldAlert, Zap } from 'lucide-react';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { ADMIN_CONSENT_ERROR } from '@/services/graphClient';
@@ -8,6 +8,7 @@ import { PolicyGraph } from '@/components/PolicyGraph';
 import { EvaluationMatrix } from '@/components/matrix/EvaluationMatrix';
 import { SankeyFunnel } from '@/components/sankey/SankeyFunnel';
 import { GapsView } from '@/components/GapsView';
+import { ImpactView } from '@/components/ImpactView';
 import { PolicyDetailPanel } from '@/components/PolicyDetailPanel';
 import { ResultsSummary } from '@/components/ResultsSummary';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -25,7 +26,7 @@ export function MainContent() {
     );
   }
 
-  const isGapsView = activeView === 'gaps';
+  const isFullAreaView = activeView === 'gaps' || activeView === 'impact';
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -67,11 +68,23 @@ export function MainContent() {
           <ShieldAlert className="h-3.5 w-3.5" />
           Gaps
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'impact' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+          onClick={() => setActiveView('impact')}
+        >
+          <Zap className="h-3.5 w-3.5" />
+          Impact
+        </Button>
       </div>
 
-      {isGapsView ? (
-        /* Gaps view takes the full content area */
-        <GapsView />
+      {isFullAreaView ? (
+        /* Full-area views take the entire content area */
+        <>
+          {activeView === 'gaps' && <GapsView />}
+          {activeView === 'impact' && <ImpactView />}
+        </>
       ) : (
         <>
           {/* Top: Visualization area (~55% height) */}

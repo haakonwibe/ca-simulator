@@ -10,12 +10,12 @@ interface EvaluationState {
   result: CAEngineResult | null;
   isEvaluating: boolean;
   selectedPolicyId: string | null;
-  activeView: 'grid' | 'matrix' | 'sankey' | 'gaps';
+  activeView: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact';
 
   // Actions
   evaluate: (policies: ConditionalAccessPolicy[], context: SimulationContext) => void;
   setSelectedPolicyId: (id: string | null) => void;
-  setActiveView: (view: 'grid' | 'matrix' | 'sankey' | 'gaps') => void;
+  setActiveView: (view: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact') => void;
   clear: () => void;
 }
 

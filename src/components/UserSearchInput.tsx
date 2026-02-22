@@ -81,7 +81,7 @@ export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchI
         setSearchResults(results.slice(0, 10));
         setShowResults(true);
       } catch (err) {
-        console.error('Search failed:', err);
+        console.error('Search failed:', err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setIsSearching(false);
       }

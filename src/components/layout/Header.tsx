@@ -5,7 +5,7 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 import { usePersonaStore } from '@/stores/usePersonaStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import type { SimulationContext } from '@/engine/models/SimulationContext';
-import { COLORS } from '@/data/theme';
+import { COLORS, APP_VERSION } from '@/data/theme';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import {
@@ -18,7 +18,7 @@ import { AboutDialog } from '@/components/AboutDialog';
 import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
 import { ReleaseNotesDialog } from '@/components/ReleaseNotesDialog';
-import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github } from 'lucide-react';
+import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee } from 'lucide-react';
 
 export function Header() {
   const { instance, accounts } = useMsal();
@@ -45,6 +45,9 @@ export function Header() {
   };
 
   const handleLogout = () => {
+    usePolicyStore.getState().clear();
+    usePersonaStore.getState().clear();
+    useEvaluationStore.getState().clear();
     instance.logoutRedirect().catch(console.error);
   };
 
@@ -79,7 +82,7 @@ export function Header() {
     try {
       await usePolicyStore.getState().loadFromGraph();
     } catch (err) {
-      console.error('Failed to load policies:', err);
+      console.error('Failed to load policies:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -96,7 +99,7 @@ export function Header() {
           className="text-[10px] px-1.5 py-0 h-5 font-normal"
           style={{ color: COLORS.textMuted, borderColor: COLORS.border }}
         >
-          v0.3.3 beta
+          {APP_VERSION}
         </Badge>
         <Button
           variant="ghost"
@@ -138,6 +141,16 @@ export function Header() {
         >
           <AlertTriangle className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
+        <a
+          href="https://buymeacoffee.com/haakonwibe"
+          target="_blank"
+          rel="noopener noreferrer"
+          title="Buy me a coffee"
+          aria-label="Buy me a coffee"
+          className="inline-flex h-7 w-7 items-center justify-center rounded-md hover:bg-accent/50 transition-colors"
+        >
+          <Coffee className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
+        </a>
       </div>
 
       {/* Center: Data source toggle */}

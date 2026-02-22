@@ -17,6 +17,60 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.4.1',
+    subtitle: 'Bug Fixes & Improvements',
+    features: [
+      {
+        heading: 'Sankey Diagram Sizing',
+        body: 'Fixed an issue where the Sankey diagram could render with incorrect dimensions on first display, requiring a tab switch to correct itself.',
+      },
+      {
+        heading: 'Other Fixes & Improvements',
+        body: 'Improved silent token renewal reliability, fixed a failing Graph API call for app registrations, and general infrastructure hardening.',
+      },
+    ],
+  },
+  {
+    version: 'v0.4.0',
+    subtitle: 'Impact Analysis',
+    features: [
+      {
+        heading: 'Impact Analysis Tab',
+        body: 'New "What if I disabled this policy?" analysis. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations to measure the effect. Policies are classified as Critical, High, Medium, or Low severity based on verdict changes, control loss, and fallback existence.',
+      },
+      {
+        heading: 'Weighted Security Posture Score',
+        body: 'Each scenario is scored 0-10 based on enforced controls (block=10, auth strength=5, MFA=3, device compliance=3, app protection=2). The overall percentage shows how your posture changes when a policy is removed. Click the info icon for the full scoring methodology.',
+      },
+      {
+        heading: 'Contextual Fallback Analysis',
+        body: 'When disabling a policy creates a gap, the tool identifies which other policies still provide protection. Fallback descriptions explain what remains and what is lost, including scope context like "MFA still required for most users, Office 365 (but device compliance no longer enforced)."',
+      },
+      {
+        heading: 'Other Protection Active',
+        body: 'Beyond direct fallbacks, the tool shows all other policies that still apply with different controls. This completes the three-tier view: red gaps, green fallbacks covering the same control, and blue cards showing other active protection.',
+      },
+      {
+        heading: 'Affected Users Breakdown',
+        body: 'Red and green pills show which user types (Standard Member, Guest User, Global Administrator) are affected vs unaffected by each policy removal, with scenario counts.',
+      },
+      {
+        heading: 'Full-Width Analysis Views',
+        body: 'The Gaps and Impact tabs now use full-width layouts since the simulation context panel is not relevant for sweep-based analysis. The Gaps view includes an inline user picker for persona selection.',
+      },
+    ],
+  },
+  {
+    version: 'v0.3.4',
+    subtitle: 'Tenant App Discovery',
+    features: [
+      {
+        heading: 'Full Application Discovery',
+        body: 'The Application dropdown now shows all enterprise applications and app registrations from your tenant — not just apps referenced in policies. Simulate sign-ins to any app to discover coverage gaps.',
+      },
+    ],
+  },
+  {
     version: 'v0.3.3',
     subtitle: 'Sample Policy Showcase',
     features: [

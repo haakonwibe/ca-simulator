@@ -44,6 +44,10 @@ export async function fetchDefaultUsers(token: string): Promise<UserSearchResult
 // ── 2. Resolve User Context ─────────────────────────────────────────
 
 export async function resolveUserContext(token: string, userId: string): Promise<UserContext> {
+  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+    throw new Error('Invalid user ID format');
+  }
+
   // Fetch profile and transitive memberships in parallel
   const [profile, memberships] = await Promise.all([
     graphFetch<{
@@ -77,9 +81,7 @@ export async function resolveUserContext(token: string, userId: string): Promise
       if (obj.roleTemplateId) {
         roleTemplateIds.push(obj.roleTemplateId);
       } else {
-        console.warn(
-          `[PersonaService] directoryRole "${obj.displayName}" (id: ${obj.id}) is missing roleTemplateId — skipping`,
-        );
+        console.warn('[PersonaService] directoryRole missing roleTemplateId — skipping');
       }
     }
     // Ignore administrativeUnit and other types

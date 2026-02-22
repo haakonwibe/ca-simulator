@@ -608,6 +608,10 @@ export const SAMPLE_DISPLAY_NAMES: Record<string, string> = {
   'MicrosoftAdminPortals': 'Microsoft Admin Portals',
   '797f4846-ba00-4fd7-ba43-dac1f8f63013': 'Azure Service Management',
   '9cdead84-a403-4b2a-ab4c-a6a50620b2f1': 'Azure Virtual Desktop',
+  '499b84ac-1321-427f-aa17-267ca6975798': 'Azure DevOps',
+  'de8bc8b5-d9f9-48b1-a8ad-b748da725064': 'Graph Explorer',
+  '14d82eec-204b-4c2f-b7e8-296a70dab67e': 'Microsoft Graph Command Line Tools',
+  '00000009-0000-0000-c000-000000000000': 'Power BI Service',
   // Roles
   '62e90394-69f5-4237-9190-012177145e10': 'Global Administrator',
   '194ae4cb-b126-40b2-bd5b-6091b380977d': 'Security Administrator',

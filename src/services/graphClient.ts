@@ -18,8 +18,9 @@ export class GraphPermissionError extends Error {
 // ── Fetch Helpers ────────────────────────────────────────────────────
 
 const FETCH_TIMEOUT_MS = 15_000;
+const MAX_RETRIES = 3;
 
-export async function graphFetch<T>(endpoint: string, token: string): Promise<T> {
+export async function graphFetch<T>(endpoint: string, token: string, extraHeaders?: Record<string, string>, _retryCount = 0): Promise<T> {
   const url = endpoint.startsWith('https://')
     ? endpoint
     : `https://graph.microsoft.com/v1.0${endpoint}`;
@@ -27,12 +28,13 @@ export async function graphFetch<T>(endpoint: string, token: string): Promise<T>
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
     const response = await fetch(url, {
-      headers: { Authorization: `Bearer ${token}` },
+      headers: { Authorization: `Bearer ${token}`, ...extraHeaders },
       signal: controller.signal,
     });
     if (!response.ok) {
       if (response.status === 403) throw new GraphPermissionError();
       if (response.status === 429) {
+        if (_retryCount >= MAX_RETRIES) throw new Error('Graph API rate limit exceeded after retries');
         clearTimeout(timeoutId);
         const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
         await new Promise<void>((resolve, reject) => {
@@ -42,7 +44,7 @@ export async function graphFetch<T>(endpoint: string, token: string): Promise<T>
             reject(new DOMException('Aborted', 'AbortError'));
           }, { once: true });
         });
-        return graphFetch<T>(endpoint, token);
+        return graphFetch<T>(endpoint, token, extraHeaders, _retryCount + 1);
       }
       throw new Error(`Graph API error: ${response.status} ${response.statusText}`);
     }
@@ -52,7 +54,7 @@ export async function graphFetch<T>(endpoint: string, token: string): Promise<T>
   }
 }
 
-export async function graphPost<T>(endpoint: string, token: string, body: unknown): Promise<T> {
+export async function graphPost<T>(endpoint: string, token: string, body: unknown, _retryCount = 0): Promise<T> {
   const controller = new AbortController();
   const timeoutId = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS);
   try {
@@ -68,6 +70,7 @@ export async function graphPost<T>(endpoint: string, token: string, body: unknow
     if (!response.ok) {
       if (response.status === 403) throw new GraphPermissionError();
       if (response.status === 429) {
+        if (_retryCount >= MAX_RETRIES) throw new Error('Graph API rate limit exceeded after retries');
         clearTimeout(timeoutId);
         const retryAfter = parseInt(response.headers.get('Retry-After') ?? '5', 10);
         await new Promise<void>((resolve, reject) => {
@@ -77,7 +80,7 @@ export async function graphPost<T>(endpoint: string, token: string, body: unknow
             reject(new DOMException('Aborted', 'AbortError'));
           }, { once: true });
         });
-        return graphPost<T>(endpoint, token, body);
+        return graphPost<T>(endpoint, token, body, _retryCount + 1);
       }
       throw new Error(`Graph API error: ${response.status} ${response.statusText}`);
     }
@@ -102,7 +105,11 @@ export async function fetchAllPages<T>(endpoint: string, token: string): Promise
   while (url) {
     const page: GraphPagedResponse<T> = await graphFetch<GraphPagedResponse<T>>(url, token);
     results.push(...page.value);
-    url = page['@odata.nextLink'];
+    const nextLink = page['@odata.nextLink'];
+    if (nextLink && !nextLink.startsWith('https://graph.microsoft.com/')) {
+      throw new Error('Untrusted @odata.nextLink URL');
+    }
+    url = nextLink;
   }
 
   return results;

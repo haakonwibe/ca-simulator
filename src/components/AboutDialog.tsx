@@ -1,6 +1,6 @@
 // components/AboutDialog.tsx — "About CA Simulator" info dialog.
 
-import { COLORS } from '@/data/theme';
+import { COLORS, APP_VERSION } from '@/data/theme';
 import {
   Dialog,
   DialogContent,
@@ -92,7 +92,7 @@ export function AboutDialog({
               >
                 Haakon Wibe
               </a>
-              {' '}&middot; v0.2 beta &middot; MIT Licensed
+              {' '}&middot; {APP_VERSION} &middot; MIT Licensed
               {' '}&middot;{' '}
               <a href="/privacy" className="hover:underline" style={{ color: COLORS.accent }}>
                 Privacy

@@ -150,7 +150,7 @@ export class PolicyEvaluator {
     try {
       return fn();
     } catch (err) {
-      console.error(`[PolicyEvaluator] ${conditionType} matcher threw:`, err);
+      console.error(`[PolicyEvaluator] ${conditionType} matcher threw:`, err instanceof Error ? err.message : 'Unknown error');
       return {
         conditionType,
         matches: true,

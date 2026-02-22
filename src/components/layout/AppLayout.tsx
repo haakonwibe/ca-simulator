@@ -2,22 +2,26 @@ import { Header } from './Header';
 import { Sidebar } from './Sidebar';
 import { MainContent } from './MainContent';
 import { MobileNotice } from '@/components/MobileNotice';
-import { COLORS } from '@/data/theme';
+import { useEvaluationStore } from '@/stores/useEvaluationStore';
+import { COLORS, APP_VERSION } from '@/data/theme';
 
 export function AppLayout() {
+  const activeView = useEvaluationStore((s) => s.activeView);
+  const showSidebar = activeView !== 'gaps' && activeView !== 'impact';
+
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <MobileNotice />
       <Header />
       <div className="flex flex-1 overflow-hidden">
-        <Sidebar />
+        {showSidebar && <Sidebar />}
         <MainContent />
       </div>
       <footer
         className="shrink-0 text-center text-xs py-1 border-t"
         style={{ color: COLORS.textDim, borderColor: COLORS.border }}
       >
-        v0.3.3 beta · Built by{' '}
+        {APP_VERSION} · Built by{' '}
         <a
           href="https://x.com/haakonwibe"
           target="_blank"

@@ -25,6 +25,8 @@ import type {
 } from '../engine/models/Policy';
 import { graphFetch, graphPost, fetchAllPages, GraphPermissionError } from './graphClient';
 import { resolveCustomAuthStrengthTier, AUTH_STRENGTH_HIERARCHY } from '../engine/authenticationStrength';
+import type { TenantApplication } from '../types/TenantApplication';
+import { BUNDLE_IDS, BUNDLED_APP_IDS } from '../data/appBundles';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -510,13 +512,105 @@ async function fetchAuthStrengthPolicies(token: string): Promise<Map<string, num
   return map;
 }
 
-// ── 9. Top-Level Orchestrator ───────────────────────────────────────
+// ── 9. Tenant Application Discovery ─────────────────────────────────
+
+/** Exported for testing — merges and deduplicates app lists. */
+export function mergeApplicationSources(
+  enterpriseApps: Array<{ appId: string; displayName: string }>,
+  appRegistrations: Array<{ appId: string; displayName: string }>,
+  policyApps: Map<string, string>,
+): TenantApplication[] {
+  const excluded = new Set([...BUNDLE_IDS, ...BUNDLED_APP_IDS, 'None']);
+  const seen = new Map<string, TenantApplication>();
+
+  // 1. Enterprise apps — highest priority
+  for (const app of enterpriseApps) {
+    if (excluded.has(app.appId)) continue;
+    seen.set(app.appId, {
+      appId: app.appId,
+      displayName: app.displayName || app.appId,
+      source: 'enterprise',
+    });
+  }
+
+  // 2. App registrations — fill gaps
+  for (const app of appRegistrations) {
+    if (excluded.has(app.appId) || seen.has(app.appId)) continue;
+    seen.set(app.appId, {
+      appId: app.appId,
+      displayName: app.displayName || app.appId,
+      source: 'registration',
+    });
+  }
+
+  // 3. Policy-referenced apps — fallback
+  for (const [appId, displayName] of policyApps) {
+    if (excluded.has(appId) || seen.has(appId)) continue;
+    seen.set(appId, {
+      appId,
+      displayName: displayName || appId,
+      source: 'policy',
+    });
+  }
+
+  // Sort alphabetically by displayName (case-insensitive)
+  return [...seen.values()].sort((a, b) =>
+    a.displayName.localeCompare(b.displayName, undefined, { sensitivity: 'base' }),
+  );
+}
+
+/**
+ * Fetch tenant applications from two Graph API sources and merge with
+ * policy-referenced apps into a single deduplicated list.
+ *
+ * @param token - Bearer token with Application.Read.All scope
+ * @param policyAppIds - Map of appId → displayName from policy extraction + resolution
+ * @returns Sorted, deduplicated array of tenant applications (excludes bundle members)
+ */
+export async function fetchTenantApplications(
+  token: string,
+  policyAppIds: Map<string, string>,
+): Promise<TenantApplication[]> {
+  let enterpriseApps: Array<{ appId: string; displayName: string }> = [];
+  let appRegistrations: Array<{ appId: string; displayName: string }> = [];
+
+  // Fetch both sources in parallel — resilient to partial failure
+  const [enterpriseResult, registrationResult] = await Promise.allSettled([
+    graphFetch<{ value: Array<{ appId: string; displayName: string }> }>(
+      `/servicePrincipals?$filter=${encodeURIComponent("servicePrincipalType eq 'Application' and not(appOwnerOrganizationId eq f8cdef31-a31e-4b4a-93e4-5f571e91255a)")}&$select=appId,displayName&$top=50&$count=true`,
+      token,
+      { 'ConsistencyLevel': 'eventual' },
+    ),
+    graphFetch<{ value: Array<{ appId: string; displayName: string }> }>(
+      '/applications?$select=appId,displayName&$top=50',
+      token,
+    ),
+  ]);
+
+  // Re-throw 403 from either source
+  if (enterpriseResult.status === 'rejected') {
+    if (enterpriseResult.reason instanceof GraphPermissionError) throw enterpriseResult.reason;
+  } else {
+    enterpriseApps = enterpriseResult.value.value;
+  }
+
+  if (registrationResult.status === 'rejected') {
+    if (registrationResult.reason instanceof GraphPermissionError) throw registrationResult.reason;
+  } else {
+    appRegistrations = registrationResult.value.value;
+  }
+
+  return mergeApplicationSources(enterpriseApps, appRegistrations, policyAppIds);
+}
+
+// ── 10. Top-Level Orchestrator ──────────────────────────────────────
 
 export async function loadPoliciesFromGraph(token: string): Promise<{
   policies: ConditionalAccessPolicy[];
   namedLocations: Map<string, NamedLocationInfo>;
   displayNames: Map<string, string>;
   authStrengthMap: Map<string, number>;
+  tenantApplications: TenantApplication[];
 }> {
   // Fetch policies, named locations, and auth strength policies in parallel
   const [rawPolicies, namedLocations, authStrengthMap] = await Promise.all([
@@ -541,6 +635,13 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
     // Non-permission errors: proceed with empty display names
   }
 
+  // Fetch tenant applications (needs resolved appNames as input)
+  const tenantApplications = await fetchTenantApplications(token, appNames)
+    .catch((error) => {
+      if (error instanceof GraphPermissionError) throw error;
+      return [] as TenantApplication[];
+    });
+
   // Merge all display names into one map for the UI
   const displayNames = new Map<string, string>();
   for (const [id, name] of directoryObjectNames) displayNames.set(id, name);
@@ -551,5 +652,5 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   // Normalize raw Graph data into engine-ready policies
   const policies = normalizePolicies(rawPolicies, directoryObjectNames, appNames, namedLocations);
 
-  return { policies, namedLocations, displayNames, authStrengthMap };
+  return { policies, namedLocations, displayNames, authStrengthMap, tenantApplications };
 }

@@ -11,7 +11,7 @@ import type { SimulationContext } from '@/engine/models/SimulationContext';
 import { deriveSatisfiedControls, deriveAuthStrengthLevel } from '@/lib/deriveSatisfiedControls';
 import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from '@/engine/models/Policy';
 import type { UserSearchResult } from '@/services/personaService';
-import { APP_BUNDLES, BUNDLE_IDS, BUNDLED_APP_IDS } from '@/data/appBundles';
+import { APP_BUNDLES } from '@/data/appBundles';
 import { AboutDialog } from '@/components/AboutDialog';
 
 import { Button } from '@/components/ui/button';
@@ -135,9 +135,6 @@ const AUTH_CONTEXT_OPTIONS = [
   { value: 'c3', label: 'C3' },
 ] as const;
 
-/** IDs that should not appear as individual tenant apps (bundles + meta values) */
-const HIDDEN_APP_IDS = new Set([...BUNDLE_IDS, 'None']);
-
 // ── Component ───────────────────────────────────────────────────────
 
 export function ScenarioPanel() {
@@ -147,7 +144,6 @@ export function ScenarioPanel() {
   const policies = usePolicyStore((s) => s.policies);
   const policyLoading = usePolicyStore((s) => s.isLoading);
   const policyError = usePolicyStore((s) => s.error);
-  const displayNames = usePolicyStore((s) => s.displayNames);
   const dataSource = usePolicyStore((s) => s.dataSource);
   const authStrengthMap = usePolicyStore((s) => s.authStrengthMap);
   const resolvedPersonas = usePersonaStore((s) => s.resolvedPersonas);
@@ -202,7 +198,7 @@ export function ScenarioPanel() {
     try {
       await usePolicyStore.getState().loadFromGraph();
     } catch (err) {
-      console.error('Failed to load policies:', err);
+      console.error('Failed to load policies:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -279,7 +275,7 @@ export function ScenarioPanel() {
         setSearchResults(results.slice(0, 10));
         setShowResults(true);
       } catch (err) {
-        console.error('Search failed:', err);
+        console.error('Search failed:', err instanceof Error ? err.message : 'Unknown error');
       } finally {
         setIsSearching(false);
       }
@@ -300,7 +296,7 @@ export function ScenarioPanel() {
     try {
       await usePersonaStore.getState().resolveAndCache(user.id);
     } catch (err) {
-      console.error('Failed to resolve user:', err);
+      console.error('Failed to resolve user:', err instanceof Error ? err.message : 'Unknown error');
     }
   };
 
@@ -341,30 +337,14 @@ export function ScenarioPanel() {
     return () => document.removeEventListener('keydown', handler);
   }, []);
 
-  // ── Tenant-specific app options from policies ───────────────────────
+  // ── Tenant-specific app options ─────────────────────────────────────
 
-  const tenantApps = useMemo(() => {
-    const apps: { value: string; label: string }[] = [];
-    const seen = new Set<string>();
+  const tenantApplications = usePolicyStore((s) => s.tenantApplications);
 
-    for (const policy of policies) {
-      const allIds = [
-        ...policy.conditions.applications.includeApplications,
-        ...policy.conditions.applications.excludeApplications,
-      ];
-      for (const id of allIds) {
-        if (HIDDEN_APP_IDS.has(id) || BUNDLED_APP_IDS.has(id) || seen.has(id)) continue;
-        const name = displayNames.get(id);
-        if (name) {
-          apps.push({ value: id, label: name });
-          seen.add(id);
-        }
-      }
-    }
-
-    apps.sort((a, b) => a.label.localeCompare(b.label));
-    return apps;
-  }, [policies, displayNames]);
+  const tenantApps = useMemo(() =>
+    tenantApplications.map((app) => ({ value: app.appId, label: app.displayName })),
+    [tenantApplications],
+  );
 
   // ── Evaluate ──────────────────────────────────────────────────────
 
@@ -695,7 +675,7 @@ export function ScenarioPanel() {
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="overflow-y-auto" position="popper" style={{ maxHeight: 'clamp(200px, 50vh, 70vh)' }}>
                 <SelectGroup>
                   <SelectLabel className="text-[10px] text-muted-foreground">Bundles</SelectLabel>
                   {APP_BUNDLES.map((bundle) => (

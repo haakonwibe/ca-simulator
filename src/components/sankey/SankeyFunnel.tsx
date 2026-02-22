@@ -43,6 +43,7 @@ export function SankeyFunnel() {
   const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 350 });
+  const [measured, setMeasured] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
 
   // Build a policyId → policyName map for tooltip display
@@ -64,14 +65,27 @@ export function SankeyFunnel() {
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
-    const observer = new ResizeObserver((entries) => {
-      const { width, height } = entries[0].contentRect;
+
+    const update = (width: number, height: number) => {
       setDimensions({
         width: Math.max(width, 600),
         height: Math.max(height - 28, 250), // subtract stage header height
       });
+      setMeasured(true);
+    };
+
+    const observer = new ResizeObserver((entries) => {
+      const { width, height } = entries[0].contentRect;
+      update(width, height);
     });
     observer.observe(container);
+
+    // Immediate measurement as safety net for deferred ResizeObserver callbacks
+    const rect = container.getBoundingClientRect();
+    if (rect.width > 0 && rect.height > 0) {
+      update(rect.width, rect.height);
+    }
+
     return () => observer.disconnect();
   }, []);
 
@@ -117,9 +131,9 @@ export function SankeyFunnel() {
 
   const hideTooltip = useCallback(() => setTooltip(null), []);
 
-  // D3 rendering
+  // D3 rendering — skip until we have real measured dimensions
   useEffect(() => {
-    if (!svgRef.current || !sankeyData) return;
+    if (!svgRef.current || !sankeyData || !measured) return;
 
     renderSankey(svgRef.current, sankeyData, dimensions, {
       onNodeHover: handleNodeHover,
@@ -127,7 +141,7 @@ export function SankeyFunnel() {
       onNodeClick: handleNodeClick,
       onMouseOut: hideTooltip,
     });
-  }, [sankeyData, dimensions, handleNodeHover, handleLinkHover, handleNodeClick, hideTooltip]);
+  }, [sankeyData, dimensions, measured, handleNodeHover, handleLinkHover, handleNodeClick, hideTooltip]);
 
   // Empty state
   if (!result || !sankeyData) {

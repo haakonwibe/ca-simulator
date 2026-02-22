@@ -138,6 +138,58 @@ function formatClientApp(app: string): string {
   return app;
 }
 
+// ── Inline user picker for Selected User mode ──
+
+function InlineUserPicker({
+  selectedUser,
+  isResolving,
+  onSelect,
+  onClear,
+}: {
+  selectedUser: UserContext | null;
+  isResolving: boolean;
+  onSelect: (user: UserSearchResult) => void;
+  onClear: () => void;
+}) {
+  if (isResolving) {
+    return (
+      <div className="flex items-center gap-2 text-xs" style={{ color: COLORS.textMuted }}>
+        <Loader2 className="h-3.5 w-3.5 animate-spin" />
+        Resolving user...
+      </div>
+    );
+  }
+
+  if (selectedUser) {
+    return (
+      <div className="flex items-center gap-2">
+        <span
+          className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs"
+          style={{ borderColor: COLORS.accent + '40', backgroundColor: COLORS.accent + '15', color: COLORS.text }}
+        >
+          <User className="h-3 w-3" style={{ color: COLORS.accent }} />
+          {selectedUser.displayName}
+          <Badge variant="outline" className="text-[10px] px-1 py-0 ml-0.5">
+            {selectedUser.userType === 'guest' ? 'Guest' : 'Member'}
+          </Badge>
+          <button
+            onClick={onClear}
+            className="ml-0.5 text-muted-foreground hover:text-foreground"
+          >
+            <X className="h-3 w-3" />
+          </button>
+        </span>
+      </div>
+    );
+  }
+
+  return (
+    <div className="w-64">
+      <UserSearchInput onSelect={onSelect} placeholder="Search for a user..." />
+    </div>
+  );
+}
+
 // ── Persona source toggle ──
 
 function PersonaSourceToggle({
@@ -541,7 +593,7 @@ export function GapsView() {
   const selectedPersonaId = usePersonaStore((s) => s.selectedPersonaId);
 
   const selectedUser = selectedPersonaId ? resolvedPersonas.get(selectedPersonaId) ?? null : null;
-  const canUseSelected = selectedUser !== null;
+  const canUseSelected = true; // Always allow — inline search provides selection
 
   const [groups, setGroups] = useState<GapGroup[] | null>(null);
   const [isAnalyzing, setIsAnalyzing] = useState(false);
@@ -653,7 +705,7 @@ export function GapsView() {
         );
       }
     } catch (err) {
-      console.error('Failed to resolve user for slot:', err);
+      console.error('Failed to resolve user for slot:', err instanceof Error ? err.message : 'Unknown error');
     }
     setIsResolvingSlot(null);
   };
@@ -672,6 +724,26 @@ export function GapsView() {
   const handleRemap = () => {
     setMappingComplete(false);
     setActivePersonaFilter(null);
+  };
+
+  // Inline user search handler for "Selected User" mode
+  const [isResolvingInline, setIsResolvingInline] = useState(false);
+  const handleInlineUserSelect = async (searchResult: UserSearchResult) => {
+    setIsResolvingInline(true);
+    try {
+      if (dataSource === 'sample') {
+        usePersonaStore.getState().resolveAndCacheSample(searchResult.id);
+      } else {
+        await usePersonaStore.getState().resolveAndCache(searchResult.id);
+      }
+    } catch (err) {
+      console.error('Failed to resolve user:', err instanceof Error ? err.message : 'Unknown error');
+    }
+    setIsResolvingInline(false);
+  };
+
+  const handleClearSelectedUser = () => {
+    usePersonaStore.setState({ selectedPersonaId: null });
   };
 
   // Scenario count for display
@@ -753,6 +825,14 @@ export function GapsView() {
       <div className="flex h-full flex-col items-center justify-center gap-4 p-8">
         <ShieldAlert className="h-10 w-10" style={{ color: COLORS.textDim }} />
         <PersonaSourceToggle {...toggleProps} />
+        {personaSource === 'selected' && (
+          <InlineUserPicker
+            selectedUser={selectedUser}
+            isResolving={isResolvingInline}
+            onSelect={handleInlineUserSelect}
+            onClear={handleClearSelectedUser}
+          />
+        )}
         <p className="text-center text-sm" style={{ color: COLORS.textMuted }}>
           Sweep {policies.length} policies across {scenarioCount.toLocaleString()} scenario combinations to find coverage gaps.
         </p>
@@ -792,6 +872,14 @@ export function GapsView() {
           All swept scenarios have enforced policy coverage.
         </p>
         <PersonaSourceToggle {...toggleProps} />
+        {personaSource === 'selected' && (
+          <InlineUserPicker
+            selectedUser={selectedUser}
+            isResolving={isResolvingInline}
+            onSelect={handleInlineUserSelect}
+            onClear={handleClearSelectedUser}
+          />
+        )}
         <Button
           variant="ghost"
           size="sm"
@@ -856,7 +944,17 @@ export function GapsView() {
         style={{ borderColor: COLORS.border }}
       >
         <div className="flex items-center justify-between">
-          <PersonaSourceToggle {...toggleProps} />
+          <div className="flex items-center gap-3">
+            <PersonaSourceToggle {...toggleProps} />
+            {personaSource === 'selected' && (
+              <InlineUserPicker
+                selectedUser={selectedUser}
+                isResolving={isResolvingInline}
+                onSelect={handleInlineUserSelect}
+                onClear={handleClearSelectedUser}
+              />
+            )}
+          </div>
           <Button
             variant="ghost"
             size="sm"

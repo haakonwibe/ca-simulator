@@ -5,52 +5,18 @@ import { CAEngine } from '@/engine/CAEngine';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { SimulationContext, UserContext } from '@/engine/models/SimulationContext';
 import type { CAEngineResult } from '@/engine/models/EvaluationResult';
-
-// ── Sweep dimensions ──
-
-const SWEEP_USER_TYPES = ['member', 'guest', 'admin'] as const;
-const SWEEP_APPS = ['All', 'Office365', 'MicrosoftAdminPortals'] as const;
-const SWEEP_PLATFORMS = ['windows', 'macOS', 'iOS', 'android', 'linux'] as const;
-const SWEEP_CLIENT_APPS = ['browser', 'mobileAppsAndDesktopClients', 'exchangeActiveSync', 'other'] as const;
-const SWEEP_LOCATIONS = ['trusted', 'untrusted'] as const;
-const SWEEP_SIGN_IN_RISK = ['none', 'low', 'medium', 'high'] as const;
-const SWEEP_USER_RISK = ['none', 'low', 'medium', 'high'] as const;
-
-type SweepUserType = (typeof SWEEP_USER_TYPES)[number];
-
-// ── Synthetic personas ──
-
-const SWEEP_USERS: Record<SweepUserType, UserContext> = {
-  member: {
-    id: 'sweep-member',
-    displayName: 'Standard Member',
-    userType: 'member',
-    memberOfGroupIds: [],
-    directoryRoleIds: [],
-  },
-  guest: {
-    id: 'sweep-guest',
-    displayName: 'Guest User',
-    userType: 'guest',
-    memberOfGroupIds: [],
-    directoryRoleIds: [],
-    guestOrExternalUserTypes: ['b2bCollaborationGuest'],
-  },
-  admin: {
-    id: 'sweep-admin',
-    displayName: 'Global Administrator',
-    userType: 'member',
-    memberOfGroupIds: [],
-    directoryRoleIds: ['62e90394-69f5-4237-9190-012177145e10'],
-  },
-};
-
-// App display names for readable output
-const APP_DISPLAY_NAMES: Record<string, string> = {
-  All: 'All Cloud Apps',
-  Office365: 'Office 365',
-  MicrosoftAdminPortals: 'Microsoft Admin Portals',
-};
+import {
+  SWEEP_USER_TYPES,
+  SWEEP_APPS,
+  SWEEP_PLATFORMS,
+  SWEEP_CLIENT_APPS,
+  SWEEP_LOCATIONS,
+  SWEEP_SIGN_IN_RISK,
+  SWEEP_USER_RISK,
+  SWEEP_USERS,
+  APP_DISPLAY_NAMES,
+  buildSweepContext,
+} from './sweepDimensions';
 
 // ── Gap result types ──
 
@@ -271,28 +237,7 @@ export function analyzeGaps(
           for (const location of SWEEP_LOCATIONS) {
             for (const signInRisk of SWEEP_SIGN_IN_RISK) {
               for (const userRisk of SWEEP_USER_RISK) {
-                const context: SimulationContext = {
-                  user,
-                  application: {
-                    appId: app,
-                    displayName: APP_DISPLAY_NAMES[app] ?? app,
-                  },
-                  device: {
-                    platform,
-                  },
-                  location: {
-                    isTrustedLocation: location === 'trusted',
-                  },
-                  risk: {
-                    signInRiskLevel: signInRisk,
-                    userRiskLevel: userRisk,
-                    insiderRiskLevel: 'none',
-                  },
-                  clientAppType: clientApp,
-                  authenticationFlow: 'none',
-                  authenticationStrengthLevel: 0,
-                  satisfiedControls: [],
-                };
+                const context = buildSweepContext(user, app, platform, clientApp, location, signInRisk, userRisk);
 
                 const result = engine.evaluate(policies, context);
                 const reportOnlyCount = result.reportOnlyPolicies.length;
