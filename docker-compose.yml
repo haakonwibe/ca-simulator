@@ -1,0 +1,10 @@
+services:
+  ca-simulator:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "5173:5173"
+    environment:
+      - VITE_MSAL_CLIENT_ID=${VITE_MSAL_CLIENT_ID:-}
+    restart: unless-stopped
