@@ -1,13 +1,11 @@
-// services/auth.ts — Centralized MSAL instance and token acquisition.
+// services/auth.ts — Centralized token acquisition.
 //
-// Single source of truth for the MSAL PublicClientApplication instance and
-// a getAccessToken() helper that handles silent acquisition with automatic
-// redirect on InteractionRequiredAuthError.
+// The MSAL instance is managed by useAuthStore (deferred initialization).
+// This module exports getAccessToken() which reads the instance from the store.
 
-import { PublicClientApplication, InteractionRequiredAuthError } from '@azure/msal-browser';
-import { msalConfig, loginRequest } from '../authConfig';
-
-export const msalInstance = new PublicClientApplication(msalConfig);
+import { InteractionRequiredAuthError } from '@azure/msal-browser';
+import { loginRequest } from '../authConfig';
+import { useAuthStore } from '../stores/useAuthStore';
 
 /**
  * Acquire an access token silently using the active MSAL account.
@@ -15,6 +13,9 @@ export const msalInstance = new PublicClientApplication(msalConfig);
  * automatically triggers a redirect-based login flow.
  */
 export async function getAccessToken(): Promise<string> {
+  const msalInstance = useAuthStore.getState().msalInstance;
+  if (!msalInstance) throw new Error('MSAL not initialized');
+
   let account = msalInstance.getActiveAccount();
   if (!account) {
     // Fallback: account exists in cache but wasn't set as active (e.g. page refresh)

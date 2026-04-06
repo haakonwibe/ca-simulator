@@ -1,7 +1,7 @@
 // components/ScenarioPanel.tsx — Sidebar simulation context controls.
 
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
-import { useIsAuthenticated } from '@azure/msal-react';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { ADMIN_CONSENT_ERROR } from '@/services/graphClient';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { usePersonaStore } from '@/stores/usePersonaStore';
@@ -138,7 +138,7 @@ const AUTH_CONTEXT_OPTIONS = [
 // ── Component ───────────────────────────────────────────────────────
 
 export function ScenarioPanel() {
-  const isAuthenticated = useIsAuthenticated();
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Stores
   const policies = usePolicyStore((s) => s.policies);
@@ -548,6 +548,8 @@ export function ScenarioPanel() {
               )}
               {searchQuery && !isSearching && (
                 <button
+                  type="button"
+                  aria-label="Clear search"
                   onClick={() => {
                     setSearchQuery('');
                     setSearchResults([]);

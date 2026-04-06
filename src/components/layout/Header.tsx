@@ -1,6 +1,5 @@
 import { useState, useEffect } from 'react';
-import { useMsal, useIsAuthenticated } from '@azure/msal-react';
-import { loginRequest } from '@/authConfig';
+import { useAuthStore } from '@/stores/useAuthStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { usePersonaStore } from '@/stores/usePersonaStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
@@ -18,11 +17,14 @@ import { AboutDialog } from '@/components/AboutDialog';
 import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
 import { ReleaseNotesDialog } from '@/components/ReleaseNotesDialog';
+import { AuthErrorBanner } from '@/components/AuthErrorBoundary';
 import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee } from 'lucide-react';
 
 export function Header() {
-  const { instance, accounts } = useMsal();
-  const isAuthenticated = useIsAuthenticated();
+  const accounts = useAuthStore((s) => s.accounts);
+  const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
+  const login = useAuthStore((s) => s.login);
+  const logout = useAuthStore((s) => s.logout);
   const account = accounts[0];
   const dataSource = usePolicyStore((s) => s.dataSource);
   const tenantName = usePolicyStore((s) => s.tenantName);
@@ -41,14 +43,11 @@ export function Header() {
   }, [isAuthenticated, account, tenantName, dataSource, loadTenantName]);
 
   const handleLogin = () => {
-    instance.loginRedirect(loginRequest).catch(console.error);
+    login().catch(console.error);
   };
 
   const handleLogout = () => {
-    usePolicyStore.getState().clear();
-    usePersonaStore.getState().clear();
-    useEvaluationStore.getState().clear();
-    instance.logoutRedirect().catch(console.error);
+    logout().catch(console.error);
   };
 
   const switchToSample = () => {
@@ -74,7 +73,7 @@ export function Header() {
 
   const switchToLive = async () => {
     if (!isAuthenticated) {
-      instance.loginRedirect(loginRequest).catch(console.error);
+      login().catch(console.error);
       return;
     }
     useEvaluationStore.getState().clear();
@@ -87,6 +86,7 @@ export function Header() {
   };
 
   return (
+    <>
     <header className="flex h-14 shrink-0 items-center justify-between border-b border-border bg-card px-4">
       {/* Left: Logo + icons */}
       <div className="flex items-center gap-2">
@@ -237,5 +237,7 @@ export function Header() {
       <ResultsTipsDialog open={tipsOpen} onOpenChange={setTipsOpen} />
       <LimitationsDialog open={limitationsOpen} onOpenChange={setLimitationsOpen} />
     </header>
+    <AuthErrorBanner />
+    </>
   );
 }

@@ -17,6 +17,16 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.4.2',
+    subtitle: 'Startup Reliability',
+    features: [
+      {
+        heading: 'Fixed Blank Page on Startup',
+        body: 'The app no longer requires MSAL authentication to render. Previously, if VITE_MSAL_CLIENT_ID was missing or MSAL initialization failed, the entire page would be blank. Now the app always mounts and sample mode works with zero configuration. MSAL initializes on-demand when you click Sign In.',
+      },
+    ],
+  },
+  {
     version: 'v0.4.1',
     subtitle: 'Bug Fixes & Improvements',
     features: [

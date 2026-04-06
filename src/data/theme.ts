@@ -1,7 +1,7 @@
 // data/theme.ts — Single source of truth for the application color system.
 // CSS variables in index.css map these values into Shadcn's token system.
 
-export const APP_VERSION = 'v0.4.1 beta';
+export const APP_VERSION = 'v0.4.2 beta';
 
 export const COLORS = {
   // Base
