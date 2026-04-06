@@ -43,6 +43,16 @@ npm run dev
 
 Open `http://localhost:5173` and click **Use Sample Data** to explore immediately — no Azure tenant required.
 
+### Docker
+
+Alternatively, run the application in a Docker container:
+
+```bash
+docker-compose up -d
+```
+
+Open `http://localhost:5173` and click **Use Sample Data** to explore.
+
 ## Live Tenant Connection
 
 To evaluate your own tenant's policies:
