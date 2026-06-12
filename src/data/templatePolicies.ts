@@ -235,6 +235,44 @@ export const TEMPLATE_POLICIES: ReadonlyMap<string, Omit<ConditionalAccessPolicy
     grantControls: { operator: 'OR', builtInControls: ['block'] },
     sessionControls: null,
   }],
+  ['block-high-risk-agents', {
+    displayName: '[Draft] Block high-risk agent identities',
+    conditions: conditions({
+      users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+      clientApplications: {
+        includeServicePrincipals: [],
+        excludeServicePrincipals: [],
+        includeAgentIdServicePrincipals: ['All'],
+      },
+      agentIdRiskLevels: ['high'],
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['block'] },
+    sessionControls: null,
+  }],
+  ['approved-agents-only', {
+    // Deny-by-default: admins add approved agents as exclusions after drafting
+    displayName: '[Draft] Allow only approved agent identities',
+    conditions: conditions({
+      users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+      clientApplications: {
+        includeServicePrincipals: [],
+        excludeServicePrincipals: [],
+        includeAgentIdServicePrincipals: ['All'],
+        excludeAgentIdServicePrincipals: [],
+      },
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['block'] },
+    sessionControls: null,
+  }],
+  ['block-risky-agent-users', {
+    displayName: "[Draft] Block risky agents' user accounts",
+    conditions: conditions({
+      users: { includeUsers: ['AllAgentIdUsers'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+      agentIdRiskLevels: ['medium', 'high'],
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['block'] },
+    sessionControls: null,
+  }],
 ]);
 
 /** Draft id for a template — stable so repeat Fix-in-sandbox reuses the draft. */

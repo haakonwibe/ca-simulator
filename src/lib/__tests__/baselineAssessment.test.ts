@@ -65,15 +65,15 @@ const blockLegacyAuth = () =>
 // ── Catalog sanity ──
 
 describe('baseline catalog', () => {
-  it('has 18 checks with unique ids', () => {
-    expect(BASELINE_CHECKS).toHaveLength(18);
+  it('has 21 checks with unique ids', () => {
+    expect(BASELINE_CHECKS).toHaveLength(21);
     const ids = new Set(BASELINE_CHECKS.map((c) => c.id));
-    expect(ids.size).toBe(18);
+    expect(ids.size).toBe(21);
   });
 
   it('every check produces at least one scenario and a result', () => {
     const result = assessBaseline([]);
-    expect(result.checks).toHaveLength(18);
+    expect(result.checks).toHaveLength(21);
     for (const check of result.checks) {
       expect(check.scenariosTotal).toBeGreaterThan(0);
     }
@@ -85,7 +85,7 @@ describe('baseline catalog', () => {
 describe('empty policy set', () => {
   it('fails every check with zero coverage', () => {
     const result = assessBaseline([]);
-    expect(result.counts.fail).toBe(18);
+    expect(result.counts.fail).toBe(21);
     expect(result.counts.pass).toBe(0);
     for (const check of result.checks) {
       expect(check.status).toBe('fail');
@@ -380,11 +380,91 @@ describe('specialized checks', () => {
 
 // ── Summaries ──
 
+// ── AI Agents checks ──
+
+describe('AI Agents checks', () => {
+  const blockHighRiskAgents = (state: ConditionalAccessPolicy['state'] = 'enabled') =>
+    createPolicy({
+      id: 'agents-high-risk',
+      displayName: 'Block high-risk agents',
+      state,
+      conditions: createBaseConditions({
+        users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        clientApplications: { includeServicePrincipals: [], excludeServicePrincipals: [], includeAgentIdServicePrincipals: ['All'] },
+        agentIdRiskLevels: ['high'],
+      }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+
+  it('block-high-risk-agents passes with the matching policy, reportOnly when not enforced', () => {
+    expect(getCheck(assessBaseline([blockHighRiskAgents()]), 'block-high-risk-agents').status).toBe('pass');
+
+    const ro = assessBaseline([blockHighRiskAgents('enabledForReportingButNotEnforced')]);
+    const check = getCheck(ro, 'block-high-risk-agents');
+    expect(check.status).toBe('reportOnly');
+    expect(check.promotablePolicies).toContain('Block high-risk agents');
+  });
+
+  it('approved-agents-only requires deny-by-default, not just risk-gating', () => {
+    // Risk-gated block alone leaves no-risk agents through → fail
+    const riskOnly = assessBaseline([blockHighRiskAgents()]);
+    expect(getCheck(riskOnly, 'approved-agents-only').status).toBe('fail');
+
+    // Deny-by-default with approved exclusions passes (generic agent not excluded)
+    const denyByDefault = createPolicy({
+      id: 'approved-only',
+      displayName: 'Allow only approved agents',
+      conditions: createBaseConditions({
+        users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        clientApplications: {
+          includeServicePrincipals: [],
+          excludeServicePrincipals: [],
+          includeAgentIdServicePrincipals: ['All'],
+          excludeAgentIdServicePrincipals: ['approved-agent-sp-1'],
+        },
+      }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+    expect(getCheck(assessBaseline([denyByDefault]), 'approved-agents-only').status).toBe('pass');
+  });
+
+  it('block-risky-agent-users passes only with agent-user targeting (All users does not count)', () => {
+    // A normal block-all-users policy never matches agent users → fail
+    const blockAllUsers = createPolicy({
+      id: 'block-everyone',
+      displayName: 'Block all users',
+      conditions: createBaseConditions({ userRiskLevels: [] }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+    expect(getCheck(assessBaseline([blockAllUsers]), 'block-risky-agent-users').status).toBe('fail');
+
+    const agentUserBlock = createPolicy({
+      id: 'risky-agent-users',
+      displayName: 'Block risky agent users',
+      conditions: createBaseConditions({
+        users: { includeUsers: ['AllAgentIdUsers'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        agentIdRiskLevels: ['medium', 'high'],
+      }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+    expect(getCheck(assessBaseline([agentUserBlock]), 'block-risky-agent-users').status).toBe('pass');
+  });
+
+  it('agent checks are not satisfied by human-targeting policies', () => {
+    // Even a block-everything user policy does nothing for agent identities
+    const result = assessBaseline([
+      createPolicy({ id: 'block-all', displayName: 'Block all', grantControls: { operator: 'OR', builtInControls: ['block'] } }),
+    ]);
+    expect(getCheck(result, 'block-high-risk-agents').status).toBe('fail');
+    expect(getCheck(result, 'approved-agents-only').status).toBe('fail');
+  });
+});
+
 describe('summaries', () => {
   it('counts add up to the catalog size', () => {
     const result = assessBaseline([mfaForAllUsers(), blockLegacyAuth()]);
     const total = result.counts.pass + result.counts.reportOnly + result.counts.partial + result.counts.fail;
-    expect(total).toBe(18);
+    expect(total).toBe(21);
   });
 
   it('category counts cover all checks in that category', () => {

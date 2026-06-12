@@ -18,7 +18,8 @@ export type BaselineCategory =
   | 'zeroTrust'
   | 'remoteWork'
   | 'protectAdmin'
-  | 'emergingThreats';
+  | 'emergingThreats'
+  | 'aiAgents';
 
 export const BASELINE_CATEGORY_LABELS: Record<BaselineCategory, string> = {
   secureFoundation: 'Secure Foundation',
@@ -26,6 +27,7 @@ export const BASELINE_CATEGORY_LABELS: Record<BaselineCategory, string> = {
   remoteWork: 'Remote Work',
   protectAdmin: 'Protect Administrators',
   emergingThreats: 'Emerging Threats',
+  aiAgents: 'AI Agents',
 };
 
 export type BaselineLicense = 'P1' | 'P2' | 'purview';
@@ -53,7 +55,14 @@ export type BaselineTarget =
   | { kind: 'userAction'; action: 'registerSecurityInformation'; displayName: string };
 
 export interface BaselineAssessmentSpec {
+  /** Ignored when `identity` is set (agent checks use synthetic agent contexts) */
   personas: BaselinePersona[];
+  /** Agent sign-in checks: synthetic agent contexts replace personas */
+  identity?: {
+    type: 'agentIdentity' | 'agentUser';
+    /** Agent risk dimension; defaults to ['none'] */
+    agentRiskLevels?: (RiskLevel | 'none')[];
+  };
   target: BaselineTarget;
   /** Defaults to all four client app types */
   clientApps?: ClientAppType[];
@@ -331,6 +340,48 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
       personas: ['member'],
       target: { kind: 'sweepApps' },
       insiderRiskLevels: ['elevated'],
+      expect: 'block',
+    },
+  },
+  {
+    id: 'block-high-risk-agents',
+    name: 'Block high-risk agent identities',
+    categories: ['aiAgents'],
+    license: 'P2',
+    docsUrl: `${DOCS}/policy-autonomous-agents`,
+    whyItMatters: 'A compromised agent operates at machine speed with standing permissions; ID Protection risk signals are the tripwire that cuts it off automatically.',
+    assessment: {
+      personas: [],
+      identity: { type: 'agentIdentity', agentRiskLevels: ['high'] },
+      target: { kind: 'sweepApps' },
+      expect: 'block',
+    },
+  },
+  {
+    id: 'approved-agents-only',
+    name: 'Allow only approved agent identities',
+    categories: ['aiAgents'],
+    license: 'P1',
+    docsUrl: `${DOCS}/policy-autonomous-agents`,
+    whyItMatters: 'Agents enter tenants through many channels (ISV consent, Copilot Studio, Foundry); deny-by-default ensures only reviewed agents can authenticate, regardless of how they arrived.',
+    assessment: {
+      personas: [],
+      identity: { type: 'agentIdentity', agentRiskLevels: ['none'] },
+      target: { kind: 'sweepApps' },
+      expect: 'block',
+    },
+  },
+  {
+    id: 'block-risky-agent-users',
+    name: "Block risky agents' user accounts",
+    categories: ['aiAgents'],
+    license: 'P2',
+    docsUrl: `${DOCS}/policy-autonomous-agents`,
+    whyItMatters: "Agents operating as users carry mailboxes and memberships; when ID Protection flags them, 'All users' policies won't catch them — only agent-user targeting will.",
+    assessment: {
+      personas: [],
+      identity: { type: 'agentUser', agentRiskLevels: ['medium', 'high'] },
+      target: { kind: 'sweepApps' },
       expect: 'block',
     },
   },

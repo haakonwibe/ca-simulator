@@ -61,8 +61,70 @@ const CLIENT_LABELS: Record<ClientAppType, string> = {
   other: 'Other (Legacy)',
 };
 
+/** Synthetic identities for agent checks */
+const SWEEP_GENERIC_AGENT = { servicePrincipalId: 'sweep-generic-agent', displayName: 'Generic agent' };
+const SWEEP_AGENT_USER: UserContext = {
+  id: 'sweep-agent-user',
+  displayName: 'Agent user account',
+  userType: 'member',
+  memberOfGroupIds: [],
+  directoryRoleIds: [],
+};
+
+/** Agent sign-in scenarios: no personas, no device platform, browser client. */
+function generateAgentScenarios(check: BaselineCheck): BaselineScenario[] {
+  const spec = check.assessment;
+  const identity = spec.identity!;
+  const scenarios: BaselineScenario[] = [];
+
+  const targets = spec.target.kind === 'app'
+    ? [{ appId: spec.target.appId, displayName: spec.target.displayName }]
+    : SWEEP_APPS.map((appId) => ({ appId, displayName: APP_DISPLAY_NAMES[appId] ?? appId }));
+  const locations = spec.locations ?? ['trusted', 'untrusted'];
+  const agentRisks = identity.agentRiskLevels ?? ['none'];
+
+  const isAgentIdentity = identity.type === 'agentIdentity';
+  const label = isAgentIdentity ? SWEEP_GENERIC_AGENT.displayName : SWEEP_AGENT_USER.displayName;
+
+  for (const target of targets) {
+    for (const location of locations) {
+      for (const agentRisk of agentRisks) {
+        scenarios.push({
+          context: {
+            user: isAgentIdentity
+              ? { id: 'sweep-agent-placeholder', displayName: label, userType: 'member', memberOfGroupIds: [], directoryRoleIds: [] }
+              : SWEEP_AGENT_USER,
+            identityType: identity.type,
+            ...(isAgentIdentity ? { agent: SWEEP_GENERIC_AGENT } : {}),
+            application: { appId: target.appId, displayName: target.displayName },
+            device: {}, // agents have no device platform
+            location: { isTrustedLocation: location === 'trusted' },
+            risk: {
+              signInRiskLevel: 'none',
+              userRiskLevel: 'none',
+              insiderRiskLevel: 'none',
+              agentRiskLevel: agentRisk as RiskLevel | 'none',
+            },
+            clientAppType: 'browser',
+            authenticationFlow: 'none',
+            authenticationStrengthLevel: 0,
+            satisfiedControls: [],
+          },
+          description: [
+            `${label} → ${target.displayName}`,
+            `${location} location`,
+            ...(agentRisk !== 'none' ? [`${agentRisk} agent risk`] : []),
+          ].join(', '),
+        });
+      }
+    }
+  }
+  return scenarios;
+}
+
 function generateScenarios(check: BaselineCheck): BaselineScenario[] {
   const spec = check.assessment;
+  if (spec.identity) return generateAgentScenarios(check);
   const scenarios: BaselineScenario[] = [];
 
   const targets: { appId: string; displayName: string; userAction?: 'registerSecurityInformation' }[] =
@@ -350,6 +412,7 @@ export function assessBaseline(
     remoteWork: { passed: 0, total: 0 },
     protectAdmin: { passed: 0, total: 0 },
     emergingThreats: { passed: 0, total: 0 },
+    aiAgents: { passed: 0, total: 0 },
   } satisfies Record<BaselineCategory, { passed: number; total: number }>;
 
   for (const result of checks) {

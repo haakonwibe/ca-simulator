@@ -189,6 +189,36 @@ export function SandboxDiffPanel({
                 </div>
               </section>
 
+              {/* Agent scenarios — verdict transitions over the agent grids */}
+              {(diff.agentIdentity.affectedScenarios > 0 || diff.agentUser.affectedScenarios > 0) && (
+                <section>
+                  <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
+                    Agent Scenarios
+                  </h4>
+                  <div className="space-y-1">
+                    {([
+                      ['Agent identities', diff.agentIdentity],
+                      ['Agent user accounts', diff.agentUser],
+                    ] as const).map(([label, agentDiff]) => (
+                      <div
+                        key={label}
+                        className="flex items-center justify-between rounded border px-2.5 py-1.5 text-xs"
+                        style={{ borderColor: COLORS.border, backgroundColor: COLORS.bgCard }}
+                      >
+                        <span style={{ color: COLORS.text }}>{label}</span>
+                        <span style={{ color: agentDiff.affectedScenarios > 0 ? COLORS.warning : COLORS.textMuted }}>
+                          {agentDiff.affectedScenarios > 0
+                            ? `${agentDiff.affectedScenarios}/${agentDiff.totalScenarios} change` +
+                              (agentDiff.newlyBlocked > 0 ? ` · ${agentDiff.newlyBlocked} newly blocked` : '') +
+                              (agentDiff.newlyAllowed > 0 ? ` · ${agentDiff.newlyAllowed} newly allowed` : '')
+                            : 'unaffected'}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              )}
+
               {/* Affected users */}
               <section>
                 <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider text-muted-foreground">
@@ -226,8 +256,10 @@ export function SandboxDiffPanel({
 
               <p className="text-[10px] leading-relaxed" style={{ color: COLORS.textDim }}>
                 Swept across 3 user types × 3 apps × 5 platforms × 4 client apps × 2 locations ×
-                4 sign-in risk × 4 user risk levels. Posture uses the same weighted scoring as the
-                Impact view.
+                4 sign-in risk × 4 user risk levels, plus agent grids (3 apps × 2 locations ×
+                4 agent risk levels per agent identity type). Posture uses the same weighted
+                scoring as the Impact view and is user-scoped; session-only control changes
+                (e.g. persistent browser) don't move these counts.
               </p>
             </>
           )}

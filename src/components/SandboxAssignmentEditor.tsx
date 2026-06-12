@@ -5,7 +5,7 @@
 // special values) and applications (bundles + tenant apps). Groups and roles
 // are remove-only in v0.7. Removed entries show as ghost chips with undo.
 
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS } from '@/data/theme';
 import {
@@ -13,6 +13,7 @@ import {
   sameMembers,
   USER_ASSIGNMENT_FIELDS,
   APP_ASSIGNMENT_FIELDS,
+  AGENT_ASSIGNMENT_FIELDS,
   ASSIGNMENT_FIELD_LABELS,
   type AssignmentField,
 } from '@/lib/sandbox';
@@ -49,13 +50,23 @@ export function SandboxAssignmentEditor({ policyId }: { policyId: string }) {
   const live = livePolicies.find((p) => p.id === policyId) ?? sandboxDrafts[policyId];
   if (!live || !effective) return null;
 
+  // Agent-targeted policies edit their agent lists; their users condition is
+  // inert (typically ['None']) and editing it would be meaningless noise.
+  const isAgentPolicy =
+    (effective.conditions.clientApplications?.includeAgentIdServicePrincipals?.length ?? 0) > 0 ||
+    (effective.conditions.clientApplications?.excludeAgentIdServicePrincipals?.length ?? 0) > 0;
+
+  const fields: readonly AssignmentField[] = isAgentPolicy
+    ? [...AGENT_ASSIGNMENT_FIELDS, ...APP_ASSIGNMENT_FIELDS]
+    : [...USER_ASSIGNMENT_FIELDS, ...APP_ASSIGNMENT_FIELDS];
+
   return (
     <div className="px-4 pb-2 pt-3">
       <h4 className="mb-2 text-xs font-semibold uppercase tracking-wider" style={{ color: COLORS.textDim }}>
         Edit Assignments
       </h4>
       <div className="space-y-2">
-        {[...USER_ASSIGNMENT_FIELDS, ...APP_ASSIGNMENT_FIELDS].map((field) => (
+        {fields.map((field) => (
           <FieldRow key={field} field={field} live={live} effective={effective} />
         ))}
       </div>
@@ -86,8 +97,9 @@ function FieldRow({
 
   const isUserAddField = field === 'includeUsers' || field === 'excludeUsers';
   const isAppField = field === 'includeApplications' || field === 'excludeApplications';
-  const entryKind = isAppField ? 'app' : 'user';
-  const canAdd = isUserAddField || isAppField;
+  const isAgentField = field === 'includeAgentIdServicePrincipals' || field === 'excludeAgentIdServicePrincipals';
+  const entryKind = isAppField ? 'app' : isAgentField ? 'agent' : 'user';
+  const canAdd = isUserAddField || isAppField || isAgentField;
 
   // Hide rows with nothing to show or do (e.g. empty group/role lists)
   if (effectiveValues.length === 0 && removed.length === 0 && !canAdd) return null;
@@ -106,6 +118,7 @@ function FieldRow({
         </span>
         {isUserAddField && <UserAddControl field={field} effectiveValues={effectiveValues} onAdd={setValues} />}
         {isAppField && <AppAddControl field={field} effectiveValues={effectiveValues} onAdd={setValues} />}
+        {isAgentField && <AgentAddControl field={field} effectiveValues={effectiveValues} onAdd={setValues} />}
       </div>
       <div className="flex flex-wrap gap-1">
         {effectiveValues.length === 0 && removed.length === 0 && (
@@ -277,6 +290,70 @@ function UserAddControl({
         inputClassName="h-7 pl-8 pr-8 text-[10px]"
       />
     </div>
+  );
+}
+
+function AgentAddControl({
+  field,
+  effectiveValues,
+  onAdd,
+}: {
+  field: AssignmentField;
+  effectiveValues: string[];
+  onAdd: (values: string[]) => void;
+}) {
+  const policies = usePolicyStore((s) => s.policies);
+  const displayNames = usePolicyStore((s) => s.displayNames);
+
+  // Known agents = those referenced by any loaded policy's agent lists
+  const options = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of policies) {
+      const ca = p.conditions.clientApplications;
+      for (const id of [
+        ...(ca?.includeAgentIdServicePrincipals ?? []),
+        ...(ca?.excludeAgentIdServicePrincipals ?? []),
+      ]) {
+        if (id !== 'All') ids.add(id);
+      }
+    }
+    return [
+      // 'All' only valid in the include direction
+      ...(field === 'includeAgentIdServicePrincipals' ? [{ id: 'All', label: 'All agent identities' }] : []),
+      ...[...ids].map((id) => ({ id, label: displayNames.get(id) ?? `${id.slice(0, 8)}…` })),
+    ].filter((opt) => !effectiveValues.includes(opt.id));
+  }, [policies, displayNames, field, effectiveValues]);
+
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-5 gap-0.5 px-1.5 text-[10px]"
+          style={{ color: COLORS.textMuted }}
+        >
+          <Plus className="h-2.5 w-2.5" />
+          Add
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end" className="max-h-64 overflow-y-auto">
+        {options.map((opt) => (
+          <DropdownMenuItem
+            key={opt.id}
+            className="text-xs"
+            onClick={() => onAdd(withValueAdded(effectiveValues, opt.id))}
+          >
+            {opt.label}
+          </DropdownMenuItem>
+        ))}
+        {options.length === 0 && (
+          <DropdownMenuItem disabled className="text-xs">
+            No known agents to add
+          </DropdownMenuItem>
+        )}
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 

@@ -18,6 +18,7 @@ import {
   SWEEP_USER_RISK,
   SWEEP_USERS,
   buildSweepContext,
+  buildAgentSweepContexts,
 } from './sweepDimensions';
 
 // ── Types ───────────────────────────────────────────────────────────
@@ -90,6 +91,15 @@ export interface ImpactAnalysisResult {
 
 // ── Sweep types ─────────────────────────────────────────────────────
 
+export interface AgentImpact {
+  /** Agent grid size (both identity types combined) */
+  totalScenarios: number;
+  /** Agent scenarios whose verdict changes when this policy is removed */
+  affectedScenarios: number;
+  /** Previously-blocked agent scenarios that open up (protection lost) */
+  newlyAllowed: number;
+}
+
 export interface PolicyImpactSweepResult extends PolicyImpactResult {
   /** How many scenarios change verdict when this policy is removed */
   affectedScenarios: number;
@@ -101,6 +111,8 @@ export interface PolicyImpactSweepResult extends PolicyImpactResult {
   coverageAfter: number;
   /** Which user dimension values are affected vs unaffected */
   affectedUserTypes: AffectedUserBreakdown;
+  /** Present only for agent-targeting policies: removal impact on the agent grids */
+  agentImpact?: AgentImpact;
 }
 
 export interface ImpactSweepResult {
@@ -1000,6 +1012,30 @@ export function analyzeImpactSweep(
       singleImpact = buildNoImpactResult(policy, baselineResults[0]);
     }
 
+    // Agent-targeting policies: the user sweep is blind to their impact —
+    // sweep the agent grids and escalate severity on real protection loss.
+    const isAgentPolicy =
+      (policy.conditions.clientApplications?.includeAgentIdServicePrincipals?.length ?? 0) > 0 ||
+      policy.conditions.users.includeUsers.includes('AllAgentIdUsers');
+    let agentImpact: AgentImpact | undefined;
+    if (isAgentPolicy && !isReportOnly) {
+      agentImpact = { totalScenarios: 0, affectedScenarios: 0, newlyAllowed: 0 };
+      for (const identityType of ['agentIdentity', 'agentUser'] as const) {
+        for (const context of buildAgentSweepContexts(identityType)) {
+          agentImpact.totalScenarios++;
+          const before = engine.evaluate(policies, context);
+          const after = engine.evaluate(withoutPolicies, context);
+          if (before.finalDecision === after.finalDecision) continue;
+          agentImpact.affectedScenarios++;
+          if (before.finalDecision === 'block' && after.finalDecision !== 'block') {
+            agentImpact.newlyAllowed++;
+          }
+        }
+      }
+    } else if (isAgentPolicy) {
+      agentImpact = { totalScenarios: 0, affectedScenarios: 0, newlyAllowed: 0 };
+    }
+
     // Severity adjustment: sweep data can escalate but not downgrade
     let severity = singleImpact.severity;
     if (
@@ -1008,6 +1044,14 @@ export function analyzeImpactSweep(
       severity === 'high'
     ) {
       severity = 'critical';
+    }
+    // Agent protection loss: blocked agent scenarios opening up with no
+    // remaining cover (the after-evaluation already includes all other
+    // policies) is access-denial loss — critical per the same rule as block.
+    if (agentImpact && agentImpact.newlyAllowed > 0) {
+      severity = 'critical';
+    } else if (agentImpact && agentImpact.affectedScenarios > 0 && (severity === 'low' || severity === 'medium')) {
+      severity = 'high';
     }
 
     sweepImpacts.push({
@@ -1018,6 +1062,7 @@ export function analyzeImpactSweep(
       coverageBefore,
       coverageAfter,
       affectedUserTypes,
+      ...(agentImpact ? { agentImpact } : {}),
     });
   }
 

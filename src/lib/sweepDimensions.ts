@@ -61,6 +61,39 @@ export const APP_DISPLAY_NAMES: Record<string, string> = {
   MicrosoftAdminPortals: 'Microsoft Admin Portals',
 };
 
+// ── Agent sweep grid ──
+// Shared by sandboxDiff and impactAnalysis: 3 apps × 2 locations × 4 agent
+// risk levels per agent identity type, no device platform, browser client.
+
+export const AGENT_SWEEP_RISKS = ['none', 'low', 'medium', 'high'] as const;
+
+export function buildAgentSweepContexts(identityType: 'agentIdentity' | 'agentUser'): SimulationContext[] {
+  const isAgentIdentity = identityType === 'agentIdentity';
+  const contexts: SimulationContext[] = [];
+  for (const app of SWEEP_APPS) {
+    for (const location of SWEEP_LOCATIONS) {
+      for (const agentRisk of AGENT_SWEEP_RISKS) {
+        contexts.push({
+          user: isAgentIdentity
+            ? { id: 'sweep-agent-placeholder', displayName: 'Generic agent', userType: 'member', memberOfGroupIds: [], directoryRoleIds: [] }
+            : { id: 'sweep-agent-user', displayName: 'Agent user account', userType: 'member', memberOfGroupIds: [], directoryRoleIds: [] },
+          identityType,
+          ...(isAgentIdentity ? { agent: { servicePrincipalId: 'sweep-generic-agent', displayName: 'Generic agent' } } : {}),
+          application: { appId: app, displayName: APP_DISPLAY_NAMES[app] ?? app },
+          device: {},
+          location: { isTrustedLocation: location === 'trusted' },
+          risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none', agentRiskLevel: agentRisk },
+          clientAppType: 'browser',
+          authenticationFlow: 'none',
+          authenticationStrengthLevel: 0,
+          satisfiedControls: [],
+        });
+      }
+    }
+  }
+  return contexts;
+}
+
 // ── Context builder ──
 
 /** Build a SimulationContext from sweep dimension values. */

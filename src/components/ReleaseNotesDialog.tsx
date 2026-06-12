@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.8',
+    subtitle: 'AI Agents Baseline',
+    features: [
+      {
+        heading: 'AI Agents Baseline Checks',
+        body: "Three new checks assess your agent posture against Microsoft's recommendations: block high-risk agent identities, allow only approved agent identities (deny-by-default), and block risky agents' user accounts. Each comes with a Fix in Sandbox template — and because verdicts are outcome-based, a deny-by-default policy that blocks all agents correctly satisfies the high-risk check too.",
+      },
+      {
+        heading: 'Agent-Aware Diff and Impact',
+        body: 'The sandbox comparison and the Impact view now sweep dedicated agent scenario grids alongside the user sweep. Agent policy changes show their real effect — previously blocked agent scenarios opening up escalate removal severity to Critical — while user posture scoring stays cleanly user-scoped.',
+      },
+      {
+        heading: 'Agent List Editing in the Sandbox',
+        body: 'Agent-targeted policies now edit their included and excluded agent identity lists with the same chip interface as user and app scoping, with known agents offered by name. The inert user fields on agent policies are no longer shown.',
+      },
+      {
+        heading: 'Refinements',
+        body: "Agent risk conditions now apply to agent user account simulations, matching Microsoft's documented recommendations, and report-only agent policies explain their zero enforcement impact instead of showing empty counts.",
+      },
+    ],
+  },
+  {
     version: 'v0.6.6',
     subtitle: 'Agent Identities',
     features: [

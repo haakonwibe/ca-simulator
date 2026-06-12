@@ -2,9 +2,10 @@
 //
 // Evaluates the agentIdRiskLevels condition (ID Protection for agents).
 // Direct list membership — no ordinal auto-escalation, same rule as every
-// other risk matcher. Only agentIdentity sign-ins can match a configured
-// agent risk condition; for any other identity type the condition fails
-// (a policy gated on agent risk cannot apply to non-agent sign-ins).
+// other risk matcher. Agent risk applies to BOTH agent identities and
+// agent user accounts (Microsoft's "Block risky agents' user accounts"
+// recommendation applies the condition to agent-user policies); only
+// plain user sign-ins fail a configured agent risk condition.
 
 import type { RiskLevel } from '../models/Policy';
 import type { ConditionMatchResult } from '../models/EvaluationResult';
@@ -12,7 +13,7 @@ import type { SimulationContext } from '../models/SimulationContext';
 
 export class AgentRiskMatcher {
   evaluate(context: SimulationContext, levels: RiskLevel[]): ConditionMatchResult {
-    if ((context.identityType ?? 'user') !== 'agentIdentity') {
+    if ((context.identityType ?? 'user') === 'user') {
       return {
         conditionType: 'agentRisk',
         matches: false,

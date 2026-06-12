@@ -32,6 +32,7 @@ import {
   SWEEP_SIGN_IN_RISK,
   SWEEP_USER_RISK,
   SWEEP_USERS,
+  APP_DISPLAY_NAMES,
   buildSweepContext,
 } from './sweepDimensions';
 
@@ -55,6 +56,14 @@ export interface SandboxChange {
   isNew?: boolean;
 }
 
+/** Verdict-transition summary for one agent identity type's scenario grid */
+export interface AgentSweepDiff {
+  totalScenarios: number;
+  affectedScenarios: number;
+  newlyBlocked: number;
+  newlyAllowed: number;
+}
+
 export interface SandboxSweepDiff {
   totalScenarios: number;
   /** Scenarios whose verdict or required controls differ between the sets */
@@ -72,11 +81,15 @@ export interface SandboxSweepDiff {
   /** Posture coverage percentage (0–100) for the sandboxed set */
   postureAfter: number;
   affectedUserTypes: AffectedUserBreakdown;
+  /** Agent sign-in grids (verdict transitions only — agents don't satisfy
+   *  human controls, so posture percentages stay user-scoped) */
+  agentIdentity: AgentSweepDiff;
+  agentUser: AgentSweepDiff;
 }
 
 // ── Change list ─────────────────────────────────────────────────────
 
-export type AssignmentEntryKind = 'user' | 'app';
+export type AssignmentEntryKind = 'user' | 'app' | 'agent';
 
 // Special values resolve BEFORE the shared display-name map: that map seeds
 // 'All' → 'All Cloud Apps' for the app-context views, which must never leak
@@ -94,13 +107,23 @@ const APP_SPECIAL_LABELS: Record<string, string> = {
   AllAgentIdResources: 'All agent resources',
 };
 
+const AGENT_SPECIAL_LABELS: Record<string, string> = {
+  All: 'All agent identities',
+};
+
+const SPECIAL_LABELS_BY_KIND: Record<AssignmentEntryKind, Record<string, string>> = {
+  user: USER_SPECIAL_LABELS,
+  app: APP_SPECIAL_LABELS,
+  agent: AGENT_SPECIAL_LABELS,
+};
+
 /** Resolve an assignment entry (special value, GUID, or bundle name) to a display name. */
 export function resolveAssignmentEntryName(
   id: string,
   displayNames?: ReadonlyMap<string, string>,
   kind: AssignmentEntryKind = 'user',
 ): string {
-  const special = (kind === 'app' ? APP_SPECIAL_LABELS : USER_SPECIAL_LABELS)[id];
+  const special = SPECIAL_LABELS_BY_KIND[kind][id];
   if (special) return special;
   return displayNames?.get(id) ?? getBundleDisplayName(id) ?? id;
 }
@@ -114,7 +137,11 @@ export function describeSandboxChanges(
   drafts: Record<string, ConditionalAccessPolicy> = {},
 ): SandboxChange[] {
   const kindOf = (field: AssignmentField): AssignmentEntryKind =>
-    field === 'includeApplications' || field === 'excludeApplications' ? 'app' : 'user';
+    field === 'includeApplications' || field === 'excludeApplications'
+      ? 'app'
+      : field === 'includeAgentIdServicePrincipals' || field === 'excludeAgentIdServicePrincipals'
+        ? 'agent'
+        : 'user';
 
   const changes: SandboxChange[] = [];
   for (const policy of livePolicies) {
@@ -174,9 +201,58 @@ function arraysEqual(a: string[], b: string[]): boolean {
   return sortedA.every((v, i) => v === sortedB[i]);
 }
 
+const AGENT_RISK_DIM = ['none', 'low', 'medium', 'high'] as const;
+
+/**
+ * Sweep the agent grid for one identity type: sweep apps × locations × agent
+ * risk levels, no device platform, browser client. 24 scenarios per type.
+ */
+function compareAgentGrid(
+  engine: CAEngine,
+  livePolicies: ConditionalAccessPolicy[],
+  sandboxPolicies: ConditionalAccessPolicy[],
+  identityType: 'agentIdentity' | 'agentUser',
+): AgentSweepDiff {
+  const diff: AgentSweepDiff = { totalScenarios: 0, affectedScenarios: 0, newlyBlocked: 0, newlyAllowed: 0 };
+  const isAgentIdentity = identityType === 'agentIdentity';
+
+  for (const app of SWEEP_APPS) {
+    for (const location of ['trusted', 'untrusted'] as const) {
+      for (const agentRisk of AGENT_RISK_DIM) {
+        const context: SimulationContext = {
+          user: isAgentIdentity
+            ? { id: 'diff-agent-placeholder', displayName: 'Generic agent', userType: 'member', memberOfGroupIds: [], directoryRoleIds: [] }
+            : { id: 'diff-agent-user', displayName: 'Agent user account', userType: 'member', memberOfGroupIds: [], directoryRoleIds: [] },
+          identityType,
+          ...(isAgentIdentity ? { agent: { servicePrincipalId: 'diff-generic-agent', displayName: 'Generic agent' } } : {}),
+          application: { appId: app, displayName: APP_DISPLAY_NAMES[app] ?? app },
+          device: {},
+          location: { isTrustedLocation: location === 'trusted' },
+          risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none', agentRiskLevel: agentRisk },
+          clientAppType: 'browser',
+          authenticationFlow: 'none',
+          authenticationStrengthLevel: 0,
+          satisfiedControls: [],
+        };
+
+        diff.totalScenarios++;
+        const live = engine.evaluate(livePolicies, context);
+        const sandbox = engine.evaluate(sandboxPolicies, context);
+        if (live.finalDecision === sandbox.finalDecision) continue;
+
+        diff.affectedScenarios++;
+        if (sandbox.finalDecision === 'block') diff.newlyBlocked++;
+        else if (live.finalDecision === 'block') diff.newlyAllowed++;
+      }
+    }
+  }
+  return diff;
+}
+
 /**
  * Compare two policy sets across the full scenario sweep.
- * Cost: 2 × totalScenarios engine evaluations (~2 × 5,760).
+ * Cost: 2 × totalScenarios engine evaluations (~2 × 5,760) plus the small
+ * agent grids (2 × 48).
  */
 export function compareSweeps(
   livePolicies: ConditionalAccessPolicy[],
@@ -274,5 +350,7 @@ export function compareSweeps(
     postureBefore: toPercent(liveScoreSum),
     postureAfter: toPercent(sandboxScoreSum),
     affectedUserTypes: { affected, notAffected },
+    agentIdentity: compareAgentGrid(engine, livePolicies, sandboxPolicies, 'agentIdentity'),
+    agentUser: compareAgentGrid(engine, livePolicies, sandboxPolicies, 'agentUser'),
   };
 }

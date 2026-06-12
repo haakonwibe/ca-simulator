@@ -1104,3 +1104,82 @@ describe('computePostureScore', () => {
     expect(computePostureScore(engineResult)).toBe(3);
   });
 });
+
+// ── Agent impact (v0.6.8) ──
+
+describe('agent policy impact', () => {
+  const agentBlock: ConditionalAccessPolicy = {
+    id: 'agents-high-risk',
+    displayName: 'Block high-risk agents',
+    state: 'enabled',
+    conditions: {
+      users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+      applications: { includeApplications: ['All'], excludeApplications: [] },
+      clientAppTypes: [],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+      clientApplications: { includeServicePrincipals: [], excludeServicePrincipals: [], includeAgentIdServicePrincipals: ['All'] },
+      agentIdRiskLevels: ['high'],
+    },
+    grantControls: { operator: 'OR', builtInControls: ['block'] },
+    sessionControls: null,
+  };
+
+  it('removing an agent block policy reports agent impact and critical severity', () => {
+    const result = analyzeImpactSweep([agentBlock]);
+    const impact = result.policyImpacts.find((p) => p.policyId === 'agents-high-risk')!;
+
+    expect(impact.agentImpact).toBeDefined();
+    expect(impact.agentImpact!.totalScenarios).toBe(48);
+    // High-risk agent-identity scenarios open up: 3 apps x 2 locations x 1 risk level
+    expect(impact.agentImpact!.affectedScenarios).toBe(6);
+    expect(impact.agentImpact!.newlyAllowed).toBe(6);
+    expect(impact.severity).toBe('critical');
+    // User sweep remains untouched
+    expect(impact.affectedScenarios).toBe(0);
+  });
+
+  it('a redundant agent policy stays low severity (remaining policy covers)', () => {
+    const blockAllAgents: ConditionalAccessPolicy = {
+      ...agentBlock,
+      id: 'block-all-agents',
+      displayName: 'Block all agents',
+      conditions: { ...agentBlock.conditions, agentIdRiskLevels: undefined },
+    };
+    const result = analyzeImpactSweep([agentBlock, blockAllAgents]);
+    const impact = result.policyImpacts.find((p) => p.policyId === 'agents-high-risk')!;
+
+    // The block-everything policy still covers the high-risk scenarios
+    expect(impact.agentImpact!.newlyAllowed).toBe(0);
+    expect(impact.agentImpact!.affectedScenarios).toBe(0);
+    expect(impact.severity).toBe('low');
+  });
+
+  it('report-only agent policies report zero agent impact', () => {
+    const reportOnly = { ...agentBlock, state: 'enabledForReportingButNotEnforced' as const };
+    const result = analyzeImpactSweep([reportOnly]);
+    const impact = result.policyImpacts.find((p) => p.policyId === 'agents-high-risk')!;
+
+    expect(impact.agentImpact).toEqual({ totalScenarios: 0, affectedScenarios: 0, newlyAllowed: 0 });
+    expect(impact.severity).toBe('low');
+  });
+
+  it('user policies carry no agentImpact', () => {
+    const mfa: ConditionalAccessPolicy = {
+      id: 'mfa-all',
+      displayName: 'MFA all',
+      state: 'enabled',
+      conditions: {
+        users: { includeUsers: ['All'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        applications: { includeApplications: ['All'], excludeApplications: [] },
+        clientAppTypes: [],
+        signInRiskLevels: [],
+        userRiskLevels: [],
+      },
+      grantControls: { operator: 'OR', builtInControls: ['mfa'] },
+      sessionControls: null,
+    };
+    const result = analyzeImpactSweep([mfa]);
+    expect(result.policyImpacts.find((p) => p.policyId === 'mfa-all')!.agentImpact).toBeUndefined();
+  });
+});

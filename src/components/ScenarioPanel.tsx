@@ -394,7 +394,8 @@ export function ScenarioPanel() {
         signInRiskLevel: signInRisk,
         userRiskLevel: userRisk,
         insiderRiskLevel: insiderRisk,
-        ...(isAgentIdentity ? { agentRiskLevel: agentRisk } : {}),
+        // Agent risk applies to both agent identities and agent user accounts
+        ...(identityType !== 'user' ? { agentRiskLevel: agentRisk } : {}),
       },
       clientAppType: clientApp,
       authenticationFlow: authFlow === 'none' ? undefined : authFlow,
@@ -564,9 +565,10 @@ export function ScenarioPanel() {
           )}
         </div>
 
-        {/* Agent picker + risk (agent identity mode) */}
-        {identityType === 'agentIdentity' && (
+        {/* Agent picker (agent identity mode) + risk (both agent modes) */}
+        {identityType !== 'user' && (
           <div className="space-y-4">
+            {identityType === 'agentIdentity' && (
             <div>
               <SectionLabel icon={<Bot className="h-3 w-3" />} label="Agent" />
               <Select value={selectedAgentId} onValueChange={(v) => { clearResults(); setSelectedAgentId(v); }}>
@@ -587,6 +589,7 @@ export function ScenarioPanel() {
                 </p>
               )}
             </div>
+            )}
             <div>
               <SectionLabel icon={<ShieldAlert className="h-3 w-3" />} label="Agent Risk" />
               <Select value={agentRisk} onValueChange={(v: RiskLevel | 'none') => { clearResults(); setAgentRisk(v); }}>

@@ -49,6 +49,7 @@ const CATEGORY_ORDER: BaselineCategory[] = [
   'remoteWork',
   'protectAdmin',
   'emergingThreats',
+  'aiAgents',
 ];
 
 // ── Main view ──

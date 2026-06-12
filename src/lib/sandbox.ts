@@ -17,6 +17,8 @@ export interface AssignmentOverride {
   excludeRoles?: string[];
   includeApplications?: string[];
   excludeApplications?: string[];
+  includeAgentIdServicePrincipals?: string[];
+  excludeAgentIdServicePrincipals?: string[];
 }
 
 export type AssignmentField = keyof AssignmentOverride;
@@ -37,6 +39,11 @@ export const APP_ASSIGNMENT_FIELDS: readonly AssignmentField[] = [
   'excludeApplications',
 ];
 
+export const AGENT_ASSIGNMENT_FIELDS: readonly AssignmentField[] = [
+  'includeAgentIdServicePrincipals',
+  'excludeAgentIdServicePrincipals',
+];
+
 export const ASSIGNMENT_FIELD_LABELS: Record<AssignmentField, string> = {
   includeUsers: 'Included users',
   excludeUsers: 'Excluded users',
@@ -46,6 +53,8 @@ export const ASSIGNMENT_FIELD_LABELS: Record<AssignmentField, string> = {
   excludeRoles: 'Excluded roles',
   includeApplications: 'Included applications',
   excludeApplications: 'Excluded applications',
+  includeAgentIdServicePrincipals: 'Included agent identities',
+  excludeAgentIdServicePrincipals: 'Excluded agent identities',
 };
 
 /** Order-insensitive array equality (assignment lists are sets in Entra). */
@@ -59,6 +68,9 @@ export function sameMembers(a: readonly string[], b: readonly string[]): boolean
 export function getAssignmentField(policy: ConditionalAccessPolicy, field: AssignmentField): string[] {
   if (field === 'includeApplications' || field === 'excludeApplications') {
     return policy.conditions.applications[field];
+  }
+  if (field === 'includeAgentIdServicePrincipals' || field === 'excludeAgentIdServicePrincipals') {
+    return policy.conditions.clientApplications?.[field] ?? [];
   }
   return policy.conditions.users[field];
 }
@@ -99,16 +111,20 @@ export function applySandboxEdits(
 
     const userPatch: Partial<ConditionalAccessPolicy['conditions']['users']> = {};
     const appPatch: Partial<ConditionalAccessPolicy['conditions']['applications']> = {};
+    const agentPatch: Record<string, string[]> = {};
     for (const field of fields) {
       const values = assignment![field];
       if (values === undefined) continue;
       if (field === 'includeApplications' || field === 'excludeApplications') {
         appPatch[field] = values;
+      } else if (field === 'includeAgentIdServicePrincipals' || field === 'excludeAgentIdServicePrincipals') {
+        agentPatch[field] = values;
       } else {
         userPatch[field] = values;
       }
     }
 
+    const hasAgentPatch = Object.keys(agentPatch).length > 0;
     return {
       ...policy,
       ...(stateChanged ? { state } : {}),
@@ -116,6 +132,16 @@ export function applySandboxEdits(
         ...policy.conditions,
         users: { ...policy.conditions.users, ...userPatch },
         applications: { ...policy.conditions.applications, ...appPatch },
+        ...(hasAgentPatch
+          ? {
+              clientApplications: {
+                includeServicePrincipals: [],
+                excludeServicePrincipals: [],
+                ...policy.conditions.clientApplications,
+                ...agentPatch,
+              },
+            }
+          : {}),
       },
     };
   });

@@ -197,6 +197,35 @@ describe('describeSandboxChanges', () => {
     expect(userChange?.added).toEqual(['All users']);
     expect(appChange?.added).toEqual(['All cloud apps']);
   });
+
+  it('agent field changes resolve with agent labels', () => {
+    const policy = createPolicy({
+      id: 'p1',
+      displayName: 'Agent Policy',
+      conditions: createBaseConditions({
+        clientApplications: {
+          includeServicePrincipals: [],
+          excludeServicePrincipals: [],
+          includeAgentIdServicePrincipals: ['All'],
+        },
+      }),
+    });
+    const changes = describeSandboxChanges(
+      [policy],
+      {},
+      { p1: { excludeAgentIdServicePrincipals: ['agent-sp-1'] } },
+      new Map([['agent-sp-1', 'Invoice Bot']]),
+    );
+
+    expect(changes[0].fieldChanges).toEqual([
+      {
+        field: 'excludeAgentIdServicePrincipals',
+        fieldLabel: 'Excluded agent identities',
+        added: ['Invoice Bot'],
+        removed: [],
+      },
+    ]);
+  });
 });
 
 // ── compareSweeps ──
@@ -215,6 +244,55 @@ describe('compareSweeps', () => {
     expect(diff.postureAfter).toBe(diff.postureBefore);
     expect(diff.affectedUserTypes.affected).toEqual([]);
     expect(diff.affectedUserTypes.notAffected).toHaveLength(3);
+    expect(diff.agentIdentity.affectedScenarios).toBe(0);
+    expect(diff.agentUser.affectedScenarios).toBe(0);
+  });
+
+  it('promoting an agent-targeting policy registers in the agent grid, not the user sweep', () => {
+    const agentBlock = createPolicy({
+      id: 'agents-high-risk',
+      displayName: 'Block high-risk agents',
+      state: 'enabledForReportingButNotEnforced',
+      conditions: createBaseConditions({
+        users: { includeUsers: ['None'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        clientApplications: { includeServicePrincipals: [], excludeServicePrincipals: [], includeAgentIdServicePrincipals: ['All'] },
+        agentIdRiskLevels: ['high'],
+      }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+    const live = [agentBlock];
+    const sandbox = applySandboxOverrides(live, { 'agents-high-risk': 'enabled' });
+    const diff = compareSweeps(live, sandbox);
+
+    // User sweep is untouched — agent policies never apply to users
+    expect(diff.affectedScenarios).toBe(0);
+    expect(diff.postureAfter).toBe(diff.postureBefore);
+    // Agent identity grid: high-risk scenarios get blocked (3 apps × 2 locations × 1 risk level)
+    expect(diff.agentIdentity.totalScenarios).toBe(24);
+    expect(diff.agentIdentity.affectedScenarios).toBe(6);
+    expect(diff.agentIdentity.newlyBlocked).toBe(6);
+    expect(diff.agentUser.affectedScenarios).toBe(0);
+  });
+
+  it('agent-user policy changes register in the agent-user grid', () => {
+    const agentUserBlock = createPolicy({
+      id: 'risky-agent-users',
+      displayName: 'Block risky agent users',
+      state: 'enabledForReportingButNotEnforced',
+      conditions: createBaseConditions({
+        users: { includeUsers: ['AllAgentIdUsers'], excludeUsers: [], includeGroups: [], excludeGroups: [], includeRoles: [], excludeRoles: [] },
+        agentIdRiskLevels: ['medium', 'high'],
+      }),
+      grantControls: { operator: 'OR', builtInControls: ['block'] },
+    });
+    const live = [agentUserBlock];
+    const sandbox = applySandboxOverrides(live, { 'risky-agent-users': 'enabled' });
+    const diff = compareSweeps(live, sandbox);
+
+    expect(diff.agentUser.affectedScenarios).toBe(12); // 3 apps × 2 locations × 2 risk levels
+    expect(diff.agentUser.newlyBlocked).toBe(12);
+    expect(diff.agentIdentity.affectedScenarios).toBe(0);
+    expect(diff.affectedScenarios).toBe(0); // human sweep untouched
   });
 
   it('promoting a report-only MFA policy strengthens posture for all user types', () => {

@@ -198,6 +198,49 @@ describe('getAssignmentField', () => {
     expect(getAssignmentField(policy, 'includeApplications')).toEqual(['All']);
     expect(getAssignmentField(policy, 'excludeGroups')).toEqual([]);
   });
+
+  it('reads agent fields, defaulting to empty without clientApplications', () => {
+    const plain = createPolicy({ id: 'p1' });
+    expect(getAssignmentField(plain, 'includeAgentIdServicePrincipals')).toEqual([]);
+
+    const agentPolicy = createPolicy({
+      id: 'p2',
+      conditions: {
+        ...createBaseConditions(),
+        clientApplications: {
+          includeServicePrincipals: [],
+          excludeServicePrincipals: [],
+          includeAgentIdServicePrincipals: ['All'],
+          excludeAgentIdServicePrincipals: ['agent-1'],
+        },
+      },
+    });
+    expect(getAssignmentField(agentPolicy, 'includeAgentIdServicePrincipals')).toEqual(['All']);
+    expect(getAssignmentField(agentPolicy, 'excludeAgentIdServicePrincipals')).toEqual(['agent-1']);
+  });
+});
+
+describe('applySandboxEdits — agent fields', () => {
+  it('patches the clientApplications block without mutating live', () => {
+    const policy = createPolicy({
+      id: 'p1',
+      conditions: {
+        ...createBaseConditions(),
+        clientApplications: {
+          includeServicePrincipals: [],
+          excludeServicePrincipals: [],
+          includeAgentIdServicePrincipals: ['All'],
+        },
+      },
+    });
+    const result = applySandboxEdits([policy], {}, {
+      p1: { excludeAgentIdServicePrincipals: ['approved-agent'] },
+    });
+
+    expect(result[0].conditions.clientApplications!.excludeAgentIdServicePrincipals).toEqual(['approved-agent']);
+    expect(result[0].conditions.clientApplications!.includeAgentIdServicePrincipals).toEqual(['All']);
+    expect(policy.conditions.clientApplications!.excludeAgentIdServicePrincipals).toBeUndefined();
+  });
 });
 
 describe('pruneSandboxOverrides', () => {

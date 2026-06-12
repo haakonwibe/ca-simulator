@@ -146,6 +146,16 @@ function ImpactDetail({ impact }: { impact: PolicyImpactSweepResult }) {
         <p className="mt-1 text-xs" style={{ color: COLORS.textMuted }}>
           Affects {impact.affectedScenarios} of {impact.totalScenarios.toLocaleString()} evaluated scenarios
         </p>
+        {impact.agentImpact && (
+          <p className="mt-0.5 text-xs" style={{ color: impact.agentImpact.newlyAllowed > 0 ? COLORS.blocked : COLORS.textMuted }}>
+            {impact.agentImpact.totalScenarios === 0
+              ? 'Agent policy — report-only, so removing it changes no enforced outcomes'
+              : `Agent scenarios: ${impact.agentImpact.affectedScenarios} of ${impact.agentImpact.totalScenarios} affected` +
+                (impact.agentImpact.newlyAllowed > 0
+                  ? ` — ${impact.agentImpact.newlyAllowed} previously blocked agent ${impact.agentImpact.newlyAllowed === 1 ? 'scenario opens' : 'scenarios open'} up`
+                  : '')}
+          </p>
+        )}
       </div>
 
       {/* Low-impact shortcut */}
@@ -227,7 +237,17 @@ function ImpactDetail({ impact }: { impact: PolicyImpactSweepResult }) {
           >
             {impact.verdictChange ? 'Verdict Change' : 'Verdict Unchanged'}
           </div>
-          {impact.verdictChange ? (
+          {impact.agentImpact && impact.affectedScenarios === 0 ? (
+            <Card
+              className="flex items-center gap-3 border p-4"
+              style={{ backgroundColor: COLORS.bgCard, borderColor: COLORS.border }}
+            >
+              <p className="text-xs" style={{ color: COLORS.textMuted }}>
+                User sign-ins are unaffected — this policy targets agent identities; the impact above
+                is on agent scenarios.
+              </p>
+            </Card>
+          ) : impact.verdictChange ? (
             <Card
               className="flex items-center justify-center gap-4 border p-4"
               style={{ backgroundColor: COLORS.bgCard, borderColor: COLORS.border }}
