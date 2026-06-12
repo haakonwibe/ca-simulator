@@ -118,9 +118,9 @@ describe('analyzeGaps', () => {
       const gaps = analyzeGaps([policy]);
       const criticalGaps = gaps.filter((g) => g.severity === 'critical');
 
-      const memberGaps = criticalGaps.filter((g) => g.userType === 'Standard Member');
-      const guestGaps = criticalGaps.filter((g) => g.userType === 'Guest User');
-      const adminGaps = criticalGaps.filter((g) => g.userType === 'Global Administrator');
+      const memberGaps = criticalGaps.filter((g) => g.personaName === 'Standard Member');
+      const guestGaps = criticalGaps.filter((g) => g.personaName === 'Guest User');
+      const adminGaps = criticalGaps.filter((g) => g.personaName === 'Global Administrator');
 
       expect(memberGaps.length).toBeGreaterThan(0);
       expect(guestGaps.length).toBeGreaterThan(0);
@@ -129,7 +129,7 @@ describe('analyzeGaps', () => {
   });
 
   describe('policy targeting only Office 365', () => {
-    it('Admin Portals show gaps but All Cloud Apps and O365 do not', () => {
+    it('Admin Portals and unlisted apps show gaps but O365 does not', () => {
       const policy = createPolicy({
         id: 'o365-mfa',
         displayName: 'Require MFA for O365',
@@ -150,11 +150,12 @@ describe('analyzeGaps', () => {
 
       const adminPortalGaps = criticalGaps.filter((g) => g.application === 'Microsoft Admin Portals');
       const o365Gaps = criticalGaps.filter((g) => g.application === 'Office 365');
-      const allAppsGaps = criticalGaps.filter((g) => g.application === 'All Cloud Apps');
+      const unlistedAppGaps = criticalGaps.filter((g) => g.application === 'Other Cloud Apps');
 
       expect(adminPortalGaps.length).toBeGreaterThan(0);
       expect(o365Gaps.length).toBe(0);
-      expect(allAppsGaps.length).toBe(0);
+      // A single-app policy must not mask gaps for apps it doesn't cover
+      expect(unlistedAppGaps.length).toBeGreaterThan(0);
     });
   });
 
@@ -183,6 +184,43 @@ describe('analyzeGaps', () => {
       expect(platformsWithGaps.has('linux')).toBe(true);
       expect(platformsWithGaps.has('windows')).toBe(false);
       expect(platformsWithGaps.has('macOS')).toBe(false);
+    });
+  });
+
+  describe('OR-operator grant controls', () => {
+    it('"mfa OR compliantDevice" does not count as guaranteeing either control', () => {
+      const policy = createPolicy({
+        id: 'or-policy',
+        displayName: 'MFA or Compliant Device',
+        grantControls: {
+          operator: 'OR',
+          builtInControls: ['mfa', 'compliantDevice'],
+        },
+      });
+
+      const gaps = analyzeGaps([policy]);
+
+      // Neither control is guaranteed individually → both warnings fire
+      expect(gaps.some((g) => g.gapType === 'no-mfa')).toBe(true);
+      expect(gaps.some((g) => g.gapType === 'no-device-compliance')).toBe(true);
+      // But "at least one of the two" IS guaranteed → no caution
+      expect(gaps.some((g) => g.gapType === 'no-mfa-or-device')).toBe(false);
+    });
+
+    it('an AND policy with both controls is fully covered (no gaps for modern clients)', () => {
+      const policy = createPolicy({
+        id: 'and-policy',
+        displayName: 'MFA and Compliant Device',
+        grantControls: {
+          operator: 'AND',
+          builtInControls: ['mfa', 'compliantDevice'],
+        },
+      });
+
+      const gaps = analyzeGaps([policy]);
+      const modernGaps = gaps.filter((g) => g.clientApp === 'browser');
+
+      expect(modernGaps.length).toBe(0);
     });
   });
 
@@ -345,7 +383,7 @@ describe('analyzeGaps', () => {
       });
 
       const gaps = analyzeGaps([policy]);
-      const memberGaps = gaps.filter((g) => g.userType === 'Standard Member');
+      const memberGaps = gaps.filter((g) => g.personaName === 'Standard Member');
       const memberGapTypes = new Set(memberGaps.map((g) => g.gapType));
 
       expect(memberGapTypes.has('no-policy')).toBe(true);
@@ -508,7 +546,6 @@ describe('groupGaps', () => {
         {
           severity: 'critical',
           gapType: 'no-policy',
-          userType: 'Standard Member',
           application: 'All Cloud Apps',
           platform: 'iOS',
           clientApp: 'browser',
@@ -526,7 +563,6 @@ describe('groupGaps', () => {
         {
           severity: 'critical',
           gapType: 'no-policy',
-          userType: 'Standard Member',
           application: 'All Cloud Apps',
           platform: 'android',
           clientApp: 'browser',
@@ -576,7 +612,6 @@ describe('groupGaps', () => {
         {
           severity: 'info',
           gapType: 'report-only',
-          userType: 'Standard Member',
           application: 'All Cloud Apps',
           platform: 'windows',
           clientApp: 'browser',
@@ -594,7 +629,6 @@ describe('groupGaps', () => {
         {
           severity: 'critical',
           gapType: 'no-policy',
-          userType: 'Guest User',
           application: 'Office 365',
           platform: 'iOS',
           clientApp: 'browser',
@@ -708,7 +742,6 @@ describe('detectDisagreement', () => {
   const dummyGap: GapResult = {
     severity: 'critical',
     gapType: 'no-policy',
-    userType: 'Test',
     application: 'Test App',
     platform: 'windows',
     clientApp: 'browser',

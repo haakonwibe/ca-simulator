@@ -89,6 +89,11 @@ export async function resolveUserContext(token: string, userId: string): Promise
 
   const isGuest = profile.userType?.toLowerCase() === 'guest';
 
+  // KNOWN LIMITATION (documented in LimitationsDialog): every live guest is
+  // classified as b2bCollaborationGuest, and homeTenantId is not resolved —
+  // Graph's user resource doesn't expose it without additional cross-tenant
+  // queries. Policies scoped to enumerated external tenants therefore never
+  // match live guest personas.
   return {
     id: profile.id,
     displayName: profile.displayName,

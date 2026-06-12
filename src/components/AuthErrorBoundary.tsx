@@ -18,9 +18,9 @@ export function AuthErrorBanner() {
   return (
     <div
       className="flex items-center gap-3 border-b px-4 py-2 text-sm"
-      style={{ borderColor: COLORS.border, backgroundColor: 'rgba(239, 68, 68, 0.08)' }}
+      style={{ borderColor: COLORS.border, backgroundColor: COLORS.blockedBg }}
     >
-      <AlertTriangle className="h-4 w-4 shrink-0 text-red-400" />
+      <AlertTriangle className="h-4 w-4 shrink-0" style={{ color: COLORS.blocked }} />
       <span className="flex-1" style={{ color: COLORS.text }}>
         {authError}
         {' '}You can continue using Sample Mode.

@@ -30,10 +30,12 @@ export class SessionControlAggregator {
       const sc = policy.sessionControls;
       if (!sc) continue;
 
-      // Sign-in frequency: shortest interval wins
+      // Sign-in frequency: shortest interval wins; 'everyTime' is the most
+      // restrictive possible (re-authenticate on every sign-in, no time window)
       if (sc.signInFrequency) {
         const freq = sc.signInFrequency;
-        const hours = toHours(freq.value, freq.type);
+        const isEveryTime = freq.frequencyInterval === 'everyTime';
+        const hours = isEveryTime ? 0 : toHours(freq.value, freq.type);
 
         if (hours < currentMinFrequencyHours) {
           currentMinFrequencyHours = hours;
@@ -41,11 +43,13 @@ export class SessionControlAggregator {
             value: freq.value,
             type: freq.type,
             isEnabled: true,
-            frequencyInterval: 'timeBased',
+            frequencyInterval: freq.frequencyInterval,
             source: policy.policyId,
           };
           trace.push(this.trace(
-            `Sign-in frequency set to ${freq.value} ${freq.type} (${hours}h) from policy "${policy.policyName}"`,
+            isEveryTime
+              ? `Sign-in frequency set to every time from policy "${policy.policyName}"`
+              : `Sign-in frequency set to ${freq.value} ${freq.type} (${hours}h) from policy "${policy.policyName}"`,
             policy.policyId,
           ));
         }

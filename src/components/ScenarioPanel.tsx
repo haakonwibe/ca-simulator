@@ -11,6 +11,7 @@ import type { SimulationContext } from '@/engine/models/SimulationContext';
 import { deriveSatisfiedControls, deriveAuthStrengthLevel } from '@/lib/deriveSatisfiedControls';
 import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from '@/engine/models/Policy';
 import type { UserSearchResult } from '@/services/personaService';
+import { useUserSearch } from '@/hooks/useUserSearch';
 import { APP_BUNDLES } from '@/data/appBundles';
 import { AboutDialog } from '@/components/AboutDialog';
 
@@ -175,16 +176,22 @@ export function ScenarioPanel() {
 
   // Button feedback state (Fix 5)
   const [justEvaluated, setJustEvaluated] = useState(false);
+  const evaluatedFlashTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   // Clear stale results helper (Fix 3)
   const clearResults = () => useEvaluationStore.getState().clear();
 
-  // User search state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  // User search (shared debounced hook — handles stale-response races and cleanup)
+  const {
+    searchQuery,
+    searchResults,
+    isSearching,
+    showResults,
+    setShowResults,
+    handleFocus: handleSearchFocus,
+    handleChange: handleSearchChange,
+    reset: resetSearch,
+  } = useUserSearch();
   const searchContainerRef = useRef<HTMLDivElement>(null);
 
   // Get selected persona context
@@ -222,71 +229,11 @@ export function ScenarioPanel() {
     }
   };
 
-  // ── User search (debounced) ───────────────────────────────────────
-
-  const showDefaultUsers = useCallback(async () => {
-    if (isSampleMode) {
-      const results = usePersonaStore.getState().searchSampleUsers('');
-      setSearchResults(results);
-      setShowResults(true);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const results = await usePersonaStore.getState().fetchDefaultUsers();
-      setSearchResults(results.slice(0, 10));
-      setShowResults(true);
-    } catch {
-      // Fall back silently — user can still type to search
-    } finally {
-      setIsSearching(false);
-    }
-  }, [isSampleMode]);
-
-  const handleSearchFocus = () => {
-    if (searchQuery.length === 0) {
-      showDefaultUsers();
-    } else if (searchResults.length > 0) {
-      setShowResults(true);
-    }
-  };
-
-  const handleSearchChange = (query: string) => {
-    setSearchQuery(query);
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-    if (isSampleMode) {
-      const results = usePersonaStore.getState().searchSampleUsers(query);
-      setSearchResults(results.slice(0, 10));
-      setShowResults(results.length > 0);
-      return;
-    }
-
-    // Live mode
-    if (query.length < 2) {
-      if (query.length === 0) showDefaultUsers();
-      return;
-    }
-
-    searchTimeout.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const results = await usePersonaStore.getState().searchUsers(query);
-        setSearchResults(results.slice(0, 10));
-        setShowResults(true);
-      } catch (err) {
-        console.error('Search failed:', err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-  };
+  // ── User search selection ─────────────────────────────────────────
 
   const handleSelectUser = async (user: UserSearchResult) => {
     clearResults();
-    setShowResults(false);
-    setSearchQuery('');
-    setSearchResults([]);
+    resetSearch();
 
     if (isSampleMode) {
       usePersonaStore.getState().resolveAndCacheSample(user.id);
@@ -405,14 +352,24 @@ export function ScenarioPanel() {
 
     evaluate(policies, context);
 
-    // Button feedback flash (Fix 5)
+    // Button feedback flash (Fix 5) — dedupe rapid clicks, clean up on unmount
     setJustEvaluated(true);
-    setTimeout(() => setJustEvaluated(false), 1000);
+    if (evaluatedFlashTimer.current) clearTimeout(evaluatedFlashTimer.current);
+    evaluatedFlashTimer.current = setTimeout(() => setJustEvaluated(false), 1000);
   };
 
-  // Keep refs current for keyboard shortcut (Fix 4)
-  handleEvaluateRef.current = handleEvaluate;
-  canEvaluateRef.current = canEvaluate;
+  // Keep refs current for keyboard shortcut (Fix 4) — in an effect, not during
+  // render (render-phase ref writes are unsafe under concurrent rendering)
+  useEffect(() => {
+    handleEvaluateRef.current = handleEvaluate;
+    canEvaluateRef.current = canEvaluate;
+  });
+
+  useEffect(() => {
+    return () => {
+      if (evaluatedFlashTimer.current) clearTimeout(evaluatedFlashTimer.current);
+    };
+  }, []);
 
   // ── Render ────────────────────────────────────────────────────────
 
@@ -483,7 +440,8 @@ export function ScenarioPanel() {
               {isSampleMode ? (
                 <Badge
                   variant="outline"
-                  className="text-xs font-normal text-blue-400 border-blue-400/50"
+                  className="text-xs font-normal"
+                  style={{ color: COLORS.accentLight, borderColor: COLORS.accentLightFaded }}
                 >
                   Sample Mode &middot; {policies.length} policies
                 </Badge>
@@ -550,11 +508,7 @@ export function ScenarioPanel() {
                 <button
                   type="button"
                   aria-label="Clear search"
-                  onClick={() => {
-                    setSearchQuery('');
-                    setSearchResults([]);
-                    setShowResults(false);
-                  }}
+                  onClick={resetSearch}
                   className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
                 >
                   <X className="h-3.5 w-3.5" />
@@ -621,7 +575,7 @@ export function ScenarioPanel() {
         {/* Authentication */}
         <div>
           <SectionLabel icon={<KeyRound className="h-3 w-3" />} label="Authentication" />
-          <Select value={authentication} onValueChange={(v: 'none' | 'mfa' | 'phishingResistantMfa') => { clearResults(); setAuthentication(v); }}>
+          <Select value={authentication} onValueChange={(v: 'none' | 'mfa' | 'passwordlessMfa' | 'phishingResistantMfa') => { clearResults(); setAuthentication(v); }}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>

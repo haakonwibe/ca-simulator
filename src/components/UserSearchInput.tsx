@@ -1,9 +1,8 @@
 // components/UserSearchInput.tsx — Reusable user search with debounced typeahead.
 // Self-contained: manages own search state, delegates resolution to parent via onSelect.
 
-import { useState, useRef, useCallback, useEffect } from 'react';
-import { usePolicyStore } from '@/stores/usePolicyStore';
-import { usePersonaStore } from '@/stores/usePersonaStore';
+import { useRef, useEffect } from 'react';
+import { useUserSearch } from '@/hooks/useUserSearch';
 import type { UserSearchResult } from '@/services/personaService';
 import { COLORS } from '@/data/theme';
 
@@ -18,80 +17,21 @@ interface UserSearchInputProps {
 }
 
 export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchInputProps) {
-  const dataSource = usePolicyStore((s) => s.dataSource);
-  const isSampleMode = dataSource === 'sample';
-
-  const [searchQuery, setSearchQuery] = useState('');
-  const [searchResults, setSearchResults] = useState<UserSearchResult[]>([]);
-  const [isSearching, setIsSearching] = useState(false);
-  const [showResults, setShowResults] = useState(false);
-  const searchTimeout = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
+  const {
+    isSampleMode,
+    searchQuery,
+    searchResults,
+    isSearching,
+    showResults,
+    setShowResults,
+    handleFocus,
+    handleChange,
+    reset,
+  } = useUserSearch();
   const containerRef = useRef<HTMLDivElement>(null);
 
-  // Show default users on focus
-  const showDefaultUsers = useCallback(async () => {
-    if (isSampleMode) {
-      const results = usePersonaStore.getState().searchSampleUsers('');
-      setSearchResults(results);
-      setShowResults(true);
-      return;
-    }
-    setIsSearching(true);
-    try {
-      const results = await usePersonaStore.getState().fetchDefaultUsers();
-      setSearchResults(results.slice(0, 10));
-      setShowResults(true);
-    } catch {
-      // Fall back silently
-    } finally {
-      setIsSearching(false);
-    }
-  }, [isSampleMode]);
-
-  const handleFocus = () => {
-    if (disabled) return;
-    if (searchQuery.length === 0) {
-      showDefaultUsers();
-    } else if (searchResults.length > 0) {
-      setShowResults(true);
-    }
-  };
-
-  const handleChange = (query: string) => {
-    setSearchQuery(query);
-    if (searchTimeout.current) clearTimeout(searchTimeout.current);
-
-    if (isSampleMode) {
-      const results = usePersonaStore.getState().searchSampleUsers(query);
-      setSearchResults(results.slice(0, 10));
-      setShowResults(results.length > 0);
-      return;
-    }
-
-    // Live mode
-    if (query.length < 2) {
-      if (query.length === 0) showDefaultUsers();
-      return;
-    }
-
-    searchTimeout.current = setTimeout(async () => {
-      setIsSearching(true);
-      try {
-        const results = await usePersonaStore.getState().searchUsers(query);
-        setSearchResults(results.slice(0, 10));
-        setShowResults(true);
-      } catch (err) {
-        console.error('Search failed:', err instanceof Error ? err.message : 'Unknown error');
-      } finally {
-        setIsSearching(false);
-      }
-    }, 300);
-  };
-
   const handleSelect = (user: UserSearchResult) => {
-    setShowResults(false);
-    setSearchQuery('');
-    setSearchResults([]);
+    reset();
     onSelect(user);
   };
 
@@ -114,7 +54,7 @@ export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchI
           placeholder={placeholder ?? (isSampleMode ? 'Search sample users...' : 'Search users...')}
           value={searchQuery}
           onChange={(e) => handleChange(e.target.value)}
-          onFocus={handleFocus}
+          onFocus={() => { if (!disabled) handleFocus(); }}
           className="h-8 pl-8 pr-8 text-xs"
           disabled={disabled}
         />
@@ -123,11 +63,7 @@ export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchI
         )}
         {searchQuery && !isSearching && (
           <button
-            onClick={() => {
-              setSearchQuery('');
-              setSearchResults([]);
-              setShowResults(false);
-            }}
+            onClick={reset}
             className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
           >
             <X className="h-3.5 w-3.5" />

@@ -7,7 +7,17 @@ import type { ClientAppType, DevicePlatform, RiskLevel } from '@/engine/models/P
 // ── Sweep dimensions ──
 
 export const SWEEP_USER_TYPES = ['member', 'guest', 'admin'] as const;
-export const SWEEP_APPS = ['All', 'Office365', 'MicrosoftAdminPortals'] as const;
+
+/**
+ * Sentinel appId representing "an app not specifically targeted by any policy".
+ * The interactive 'All' context matches every policy's application condition,
+ * which in a brute-force sweep would let a single-app policy suppress gaps (and
+ * overstate its removal impact) for the whole row. This sentinel matches only
+ * policies scoped to All cloud apps, so the row reflects baseline coverage.
+ */
+export const SWEEP_UNLISTED_APP = 'sweep-unlisted-app';
+
+export const SWEEP_APPS = [SWEEP_UNLISTED_APP, 'Office365', 'MicrosoftAdminPortals'] as const;
 export const SWEEP_PLATFORMS = ['windows', 'macOS', 'iOS', 'android', 'linux'] as const;
 export const SWEEP_CLIENT_APPS = ['browser', 'mobileAppsAndDesktopClients', 'exchangeActiveSync', 'other'] as const;
 export const SWEEP_LOCATIONS = ['trusted', 'untrusted'] as const;
@@ -46,7 +56,7 @@ export const SWEEP_USERS: Record<SweepUserType, UserContext> = {
 // ── App display names ──
 
 export const APP_DISPLAY_NAMES: Record<string, string> = {
-  All: 'All Cloud Apps',
+  [SWEEP_UNLISTED_APP]: 'Other Cloud Apps',
   Office365: 'Office 365',
   MicrosoftAdminPortals: 'Microsoft Admin Portals',
 };

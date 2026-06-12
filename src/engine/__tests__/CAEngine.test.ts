@@ -123,6 +123,26 @@ describe('CAEngine', () => {
   });
 
   // ──────────────────────────────────────────────
+  // Terms-of-Use-only policy
+  // ──────────────────────────────────────────────
+  describe('terms-of-use-only policy', () => {
+    it('finalDecision: controlsRequired (sign-in interrupted, not plain allow)', () => {
+      const policies = [
+        createPolicy({
+          id: 'tou-policy',
+          displayName: 'Require Terms of Use',
+          grantControls: { operator: 'AND', builtInControls: [], termsOfUse: ['tou-agreement-id'] },
+        }),
+      ];
+
+      const result = engine.evaluate(policies, DEFAULT_CONTEXT);
+
+      expect(result.finalDecision).toBe('controlsRequired');
+      expect(result.requiredControls).toContain('termsOfUse:tou-agreement-id');
+    });
+  });
+
+  // ──────────────────────────────────────────────
   // Block policy
   // ──────────────────────────────────────────────
   describe('block policy', () => {

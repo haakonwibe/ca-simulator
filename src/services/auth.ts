@@ -7,6 +7,12 @@ import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { loginRequest } from '../authConfig';
 import { useAuthStore } from '../stores/useAuthStore';
 
+// Concurrent getAccessToken calls (e.g. policy load + persona resolution) can
+// both hit InteractionRequiredAuthError; a second acquireTokenRedirect while
+// the first is starting throws interaction_in_progress. Only the first caller
+// triggers the redirect.
+let redirectInProgress = false;
+
 /**
  * Acquire an access token silently using the active MSAL account.
  * If the silent call fails due to expired session or missing consent,
@@ -35,9 +41,12 @@ export async function getAccessToken(): Promise<string> {
     return response.accessToken;
   } catch (error) {
     if (error instanceof InteractionRequiredAuthError) {
-      await msalInstance.acquireTokenRedirect(loginRequest);
-      // acquireTokenRedirect navigates away — this line is never reached,
-      // but we throw to satisfy the return type and signal callers.
+      if (!redirectInProgress) {
+        redirectInProgress = true;
+        await msalInstance.acquireTokenRedirect(loginRequest);
+      }
+      // acquireTokenRedirect navigates away — this line is reached only by
+      // concurrent callers while the redirect is starting.
       throw new Error('Redirecting to login');
     }
     throw error;

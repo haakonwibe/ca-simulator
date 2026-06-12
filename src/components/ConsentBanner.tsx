@@ -37,14 +37,14 @@ export function ConsentBanner() {
         className="max-w-lg w-full rounded-lg border-l-4 p-6"
         style={{
           backgroundColor: COLORS.bgCard,
-          borderLeftColor: '#d97706',
+          borderLeftColor: COLORS.warning,
           borderTop: `1px solid ${COLORS.border}`,
           borderRight: `1px solid ${COLORS.border}`,
           borderBottom: `1px solid ${COLORS.border}`,
         }}
       >
         <div className="flex items-start gap-3">
-          <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" style={{ color: '#d97706' }} />
+          <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" style={{ color: COLORS.warning }} />
           <div className="space-y-3">
             <h3 className="text-sm font-semibold" style={{ color: COLORS.text }}>
               Admin Consent Required

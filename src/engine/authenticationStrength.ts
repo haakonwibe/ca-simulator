@@ -68,14 +68,6 @@ export function resolveCustomAuthStrengthTier(allowedCombinations: string[]): nu
 // ── Public API ──────────────────────────────────────────────────────
 
 /**
- * Returns the hierarchy level for a given authentication strength ID.
- * Known built-in IDs return 1–3. Unknown/custom IDs return -1 (never satisfied).
- */
-export function getAuthStrengthLevel(id: string): number {
-  return AUTH_STRENGTH_HIERARCHY.get(id) ?? -1;
-}
-
-/**
  * Determines if the user's authentication strength level satisfies the policy's requirement.
  * Checks built-in IDs first, then falls back to the custom auth strength map.
  * User level must be >= the policy's required level.

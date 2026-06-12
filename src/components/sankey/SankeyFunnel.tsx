@@ -40,8 +40,8 @@ export function SankeyFunnel() {
   const result = useEvaluationStore((s) => s.result);
   const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
 
-  const containerRef = useRef<HTMLDivElement>(null);
   const svgRef = useRef<SVGSVGElement>(null);
+  const resizeObserverRef = useRef<ResizeObserver | null>(null);
   const [dimensions, setDimensions] = useState({ width: 800, height: 350 });
   const [measured, setMeasured] = useState(false);
   const [tooltip, setTooltip] = useState<TooltipState | null>(null);
@@ -61,9 +61,12 @@ export function SankeyFunnel() {
     [result, policies],
   );
 
-  // ResizeObserver
-  useEffect(() => {
-    const container = containerRef.current;
+  // ResizeObserver — attached via ref callback because the container div only
+  // exists once a result is rendered (the component shows EmptyState before
+  // that), so a mount-time effect would miss it entirely.
+  const containerRef = useCallback((container: HTMLDivElement | null) => {
+    resizeObserverRef.current?.disconnect();
+    resizeObserverRef.current = null;
     if (!container) return;
 
     const update = (width: number, height: number) => {
@@ -79,14 +82,13 @@ export function SankeyFunnel() {
       update(width, height);
     });
     observer.observe(container);
+    resizeObserverRef.current = observer;
 
     // Immediate measurement as safety net for deferred ResizeObserver callbacks
     const rect = container.getBoundingClientRect();
     if (rect.width > 0 && rect.height > 0) {
       update(rect.width, rect.height);
     }
-
-    return () => observer.disconnect();
   }, []);
 
   // Tooltip handlers

@@ -14,6 +14,7 @@ import { DeviceFilterMatcher } from './conditions/DeviceFilterMatcher';
 import { AuthenticationFlowMatcher } from './conditions/AuthenticationFlowMatcher';
 import { InsiderRiskMatcher } from './conditions/InsiderRiskMatcher';
 import { isAuthStrengthSatisfied } from './authenticationStrength';
+import { evaluateGrantSatisfaction } from './grantSatisfaction';
 
 /**
  * Evaluates a single Conditional Access policy against a simulation context.
@@ -180,10 +181,16 @@ export class PolicyEvaluator {
     context: SimulationContext,
   ): PolicyEvaluationResult['grantControls'] {
     const controls = grantControls.builtInControls.map(String);
+    // Terms of Use and custom authentication factors are grant controls in Entra:
+    // they participate in the policy's AND/OR operator like built-in controls.
+    // They cannot be satisfied in simulation (the sign-in would be interrupted).
+    for (const touId of grantControls.termsOfUse ?? []) {
+      controls.push(`termsOfUse:${touId}`);
+    }
+    for (const factor of grantControls.customAuthenticationFactors ?? []) {
+      controls.push(`customAuthenticationFactor:${factor}`);
+    }
     const satisfied = context.satisfiedControls.map(String);
-
-    const satisfiedControls = controls.filter((c) => satisfied.includes(c));
-    const unsatisfiedControls = controls.filter((c) => !satisfied.includes(c));
 
     // Authentication strength evaluation
     let authStrengthResult: { displayName: string; policyStrengthId: string; satisfied: boolean } | undefined;
@@ -197,27 +204,19 @@ export class PolicyEvaluator {
       };
     }
 
-    let isSatisfied: boolean;
-    if (grantControls.operator === 'AND') {
-      // All controls must be satisfied, plus authenticationStrength if present
-      isSatisfied = unsatisfiedControls.length === 0 && (authStrengthResult?.satisfied ?? true);
-    } else {
-      // At least one control OR authStrength must be satisfied
-      if (controls.length === 0 && authStrengthResult) {
-        isSatisfied = authStrengthResult.satisfied;
-      } else if (controls.length === 0 && !authStrengthResult) {
-        isSatisfied = true;
-      } else {
-        isSatisfied = satisfiedControls.length > 0 || (authStrengthResult?.satisfied ?? false);
-      }
-    }
+    const satisfaction = evaluateGrantSatisfaction(
+      grantControls.operator,
+      controls,
+      satisfied,
+      authStrengthResult?.satisfied,
+    );
 
     return {
       operator: grantControls.operator,
       controls,
-      satisfied: isSatisfied,
-      satisfiedControls,
-      unsatisfiedControls,
+      satisfied: satisfaction.satisfied,
+      satisfiedControls: satisfaction.satisfiedControls,
+      unsatisfiedControls: satisfaction.unsatisfiedControls,
       authenticationStrength: authStrengthResult,
     };
   }
@@ -235,6 +234,7 @@ export class PolicyEvaluator {
       result.signInFrequency = {
         value: sessionControls.signInFrequency.value,
         type: sessionControls.signInFrequency.type,
+        frequencyInterval: sessionControls.signInFrequency.frequencyInterval,
       };
     }
     if (sessionControls.persistentBrowser?.isEnabled) {

@@ -1,7 +1,9 @@
 // data/theme.ts — Single source of truth for the application color system.
 // CSS variables in index.css map these values into Shadcn's token system.
 
-export const APP_VERSION = 'v0.4.2 beta';
+import { KeyRound, Shield, Laptop, MapPin, Zap, Smartphone, Timer, type LucideIcon } from 'lucide-react';
+
+export const APP_VERSION = 'v0.4.3 beta';
 
 export const COLORS = {
   // Base
@@ -16,6 +18,10 @@ export const COLORS = {
   textDim: '#475569',
   accent: '#3b82f6',
   accentGlow: 'rgba(59, 130, 246, 0.3)',
+  accentLight: '#60a5fa',
+  accentLightFaded: 'rgba(96, 165, 250, 0.5)',
+  selectedBg: 'rgba(59, 130, 246, 0.06)',
+  warning: '#d97706',
 
   // Evaluation outcomes
   granted: '#10b981',
@@ -24,12 +30,15 @@ export const COLORS = {
   blocked: '#ef4444',
   blockedGlow: 'rgba(239, 68, 68, 0.4)',
   blockedBg: 'rgba(239, 68, 68, 0.08)',
+  blockedBorder: 'rgba(239, 68, 68, 0.3)',
   mfa: '#f59e0b',
   mfaGlow: 'rgba(245, 158, 11, 0.4)',
   mfaBg: 'rgba(245, 158, 11, 0.08)',
+  mfaBorder: 'rgba(245, 158, 11, 0.3)',
   unsatisfied: '#f97316',
   unsatisfiedGlow: 'rgba(249, 115, 22, 0.4)',
   unsatisfiedBg: 'rgba(249, 115, 22, 0.08)',
+  unsatisfiedBorder: 'rgba(249, 115, 22, 0.3)',
   notApplicable: '#334155',
   notApplicableBg: 'rgba(51, 65, 85, 0.3)',
   reportOnly: '#3b82f6',
@@ -48,12 +57,12 @@ export const COLORS = {
   session: '#14b8a6',
 } as const;
 
-export const CATEGORY_META: Record<string, { color: string; icon: string; label: string }> = {
-  identity:         { color: COLORS.identity,      icon: '\u{1F510}', label: 'Identity' },
-  security:         { color: COLORS.security,      icon: '\u{1F6E1}', label: 'Security' },
-  device:           { color: COLORS.device,        icon: '\u{1F4BB}', label: 'Device' },
-  location:         { color: COLORS.location,      icon: '\u{1F4CD}', label: 'Location' },
-  risk:             { color: COLORS.risk,           icon: '\u{26A1}',  label: 'Risk' },
-  'app-protection': { color: COLORS.appProtection, icon: '\u{1F4F1}', label: 'App Protection' },
-  session:          { color: COLORS.session,        icon: '\u{23F1}',  label: 'Session' },
+export const CATEGORY_META: Record<string, { color: string; icon: LucideIcon; label: string }> = {
+  identity:         { color: COLORS.identity,      icon: KeyRound,   label: 'Identity' },
+  security:         { color: COLORS.security,      icon: Shield,     label: 'Security' },
+  device:           { color: COLORS.device,        icon: Laptop,     label: 'Device' },
+  location:         { color: COLORS.location,      icon: MapPin,     label: 'Location' },
+  risk:             { color: COLORS.risk,           icon: Zap,        label: 'Risk' },
+  'app-protection': { color: COLORS.appProtection, icon: Smartphone, label: 'App Protection' },
+  session:          { color: COLORS.session,        icon: Timer,      label: 'Session' },
 };

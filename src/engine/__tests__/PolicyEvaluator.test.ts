@@ -353,6 +353,69 @@ describe('PolicyEvaluator', () => {
   });
 
   // ──────────────────────────────────────────────
+  // Grant controls — terms of use / custom factors
+  // ──────────────────────────────────────────────
+  describe('grant controls — terms of use and custom authentication factors', () => {
+    it('ToU-only policy is unsatisfied (sign-in would be interrupted)', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'AND',
+          builtInControls: [],
+          termsOfUse: ['tou-agreement-id'],
+        },
+      });
+      const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
+
+      expect(result.applies).toBe(true);
+      expect(result.grantControls?.satisfied).toBe(false);
+      expect(result.grantControls?.unsatisfiedControls).toEqual(['termsOfUse:tou-agreement-id']);
+    });
+
+    it('OR policy with mfa + ToU is satisfied by mfa alone', () => {
+      const ctx = createTestContext({ satisfiedControls: ['mfa'] });
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'OR',
+          builtInControls: ['mfa'],
+          termsOfUse: ['tou-agreement-id'],
+        },
+      });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.satisfied).toBe(true);
+    });
+
+    it('AND policy with mfa + ToU is unsatisfied even when mfa is satisfied', () => {
+      const ctx = createTestContext({ satisfiedControls: ['mfa'] });
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'AND',
+          builtInControls: ['mfa'],
+          termsOfUse: ['tou-agreement-id'],
+        },
+      });
+      const result = evaluator.evaluate(policy, ctx);
+
+      expect(result.grantControls?.satisfied).toBe(false);
+      expect(result.grantControls?.unsatisfiedControls).toEqual(['termsOfUse:tou-agreement-id']);
+    });
+
+    it('custom authentication factors are required controls that cannot be satisfied', () => {
+      const policy = createPolicy({
+        grantControls: {
+          operator: 'AND',
+          builtInControls: [],
+          customAuthenticationFactors: ['duoSecurity'],
+        },
+      });
+      const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
+
+      expect(result.grantControls?.satisfied).toBe(false);
+      expect(result.grantControls?.unsatisfiedControls).toEqual(['customAuthenticationFactor:duoSecurity']);
+    });
+  });
+
+  // ──────────────────────────────────────────────
   // grantControls: null — session-only policy
   // ──────────────────────────────────────────────
   describe('null grant controls', () => {
@@ -441,7 +504,7 @@ describe('PolicyEvaluator', () => {
       const result = evaluator.evaluate(policy, STANDARD_USER_CONTEXT);
 
       expect(result.sessionControls).toEqual({
-        signInFrequency: { value: 4, type: 'hours' },
+        signInFrequency: { value: 4, type: 'hours', frequencyInterval: 'timeBased' },
         persistentBrowser: 'never',
       });
     });

@@ -7,6 +7,7 @@ import { CAEngine } from '@/engine/CAEngine';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { SimulationContext } from '@/engine/models/SimulationContext';
 import type { CAEngineResult } from '@/engine/models/EvaluationResult';
+import { deriveGuaranteedControls, controlCategory } from './guaranteedControls';
 import {
   SWEEP_USER_TYPES,
   SWEEP_APPS,
@@ -136,26 +137,26 @@ export const MAX_POSTURE_SCORE = 10;
  *
  * Rules:
  * - block = instant 10 (access denied, nothing else matters)
+ * - only GUARANTEED controls score at full weight; an OR grant with multiple
+ *   alternatives scores at its weakest alternative (the sign-in may complete
+ *   with only that one)
  * - authenticationStrength and mfa don't stack — take the higher
  * - compliantDevice and domainJoinedDevice don't stack — take the higher
- * - sign-in frequency session control adds 1 point
+ * - sign-in frequency session control adds 1 point (including session-only policies)
  * - Cap at MAX_POSTURE_SCORE
- * - allow with no controls = 0
+ * - allow with no controls and no session controls = 0
  */
 export function computePostureScore(result: CAEngineResult): number {
-  if (result.finalDecision === 'allow' && result.requiredControls.length === 0) {
-    return 0;
-  }
-
   if (result.finalDecision === 'block') {
     return MAX_POSTURE_SCORE;
   }
 
   let score = 0;
-  const controls = new Set(result.requiredControls);
+  const { guaranteed, alternativeSets } = deriveGuaranteedControls(result.appliedPolicies);
+  const controls = guaranteed;
 
   // Auth: take the stronger of authenticationStrength vs mfa (don't stack)
-  const hasAuthStrength = result.requiredControls.some(c => c.startsWith('authenticationStrength:'));
+  const hasAuthStrength = [...controls].some(c => c.startsWith('authenticationStrength:'));
   if (hasAuthStrength) {
     score += AUTH_STRENGTH_WEIGHT;
   } else if (controls.has('mfa')) {
@@ -176,12 +177,27 @@ export function computePostureScore(result: CAEngineResult): number {
   // Remediation
   if (controls.has('passwordChange')) score += CONTROL_WEIGHTS.passwordChange;
 
+  // Multi-alternative OR grants: credit the weakest alternative, unless one of
+  // the alternatives is already covered by a guaranteed control of the same
+  // category (then the OR adds nothing the user wasn't already doing)
+  const guaranteedCategories = new Set([...controls].map(controlCategory));
+  for (const set of alternativeSets) {
+    if (set.some(c => guaranteedCategories.has(controlCategory(c)))) continue;
+    score += Math.min(...set.map(standaloneControlWeight));
+  }
+
   // Session controls: check for sign-in frequency
   if (result.sessionControls?.signInFrequency?.isEnabled) {
     score += SESSION_SIGN_IN_FREQUENCY_WEIGHT;
   }
 
   return Math.min(score, MAX_POSTURE_SCORE);
+}
+
+/** Weight of a single control when it is the only thing a sign-in must satisfy. */
+function standaloneControlWeight(control: string): number {
+  if (control.startsWith('authenticationStrength:')) return AUTH_STRENGTH_WEIGHT;
+  return CONTROL_WEIGHTS[control] ?? 0;
 }
 
 // ── Severity ordering ───────────────────────────────────────────────
@@ -230,6 +246,12 @@ function formatControlName(control: string): string {
   if (control.startsWith('authenticationStrength:')) {
     const strengthName = control.substring('authenticationStrength:'.length);
     return `${formatAuthStrengthName(strengthName)}`;
+  }
+  if (control.startsWith('termsOfUse:')) {
+    return 'Terms of Use';
+  }
+  if (control.startsWith('customAuthenticationFactor:')) {
+    return `Custom Factor (${control.substring('customAuthenticationFactor:'.length)})`;
   }
   const CONTROL_LABELS: Record<string, string> = {
     mfa: 'MFA',
@@ -536,12 +558,23 @@ function findOtherProtection(
     // Skip policies already shown as fallbacks
     if (fallbackPolicyIds.has(applied.policyId)) continue;
 
+    // Build full control list — authenticationStrength is a grant control too,
+    // stored separately from grantControls.controls (same as findFallbackPolicies)
+    const policyControls = [...(applied.grantControls?.controls ?? [])];
+    if (applied.grantControls?.authenticationStrength) {
+      policyControls.push(`authenticationStrength:${applied.grantControls.authenticationStrength.displayName}`);
+    }
+
     // Skip policies with no grant or session controls
-    const hasGrant = applied.grantControls && applied.grantControls.controls.length > 0;
-    const hasSession = applied.sessionControls && (
-      applied.sessionControls.signInFrequency !== undefined ||
-      applied.sessionControls.persistentBrowser !== undefined ||
-      applied.sessionControls.cloudAppSecurity !== undefined
+    const hasGrant = policyControls.length > 0;
+    const sc = applied.sessionControls;
+    const hasSession = sc && (
+      sc.signInFrequency !== undefined ||
+      sc.persistentBrowser !== undefined ||
+      sc.cloudAppSecurity !== undefined ||
+      sc.continuousAccessEvaluation !== undefined ||
+      sc.applicationEnforcedRestrictions !== undefined ||
+      sc.secureSignInSession !== undefined
     );
     if (!hasGrant && !hasSession) continue;
 
@@ -550,8 +583,8 @@ function findOtherProtection(
     const descParts: string[] = [];
 
     // Describe grant controls
-    if (applied.grantControls && applied.grantControls.controls.length > 0) {
-      const controlLabels = applied.grantControls.controls.map(c => {
+    if (policyControls.length > 0) {
+      const controlLabels = policyControls.map(c => {
         if (c === 'mfa') return 'MFA';
         if (c === 'compliantDevice') return 'device compliance';
         if (c === 'domainJoinedDevice') return 'hybrid Azure AD join';
@@ -565,14 +598,23 @@ function findOtherProtection(
     }
 
     // Describe session controls
-    if (applied.sessionControls?.signInFrequency !== undefined) {
+    if (sc?.signInFrequency !== undefined) {
       descParts.push('sign-in frequency controls');
     }
-    if (applied.sessionControls?.persistentBrowser !== undefined) {
+    if (sc?.persistentBrowser !== undefined) {
       descParts.push('persistent browser restrictions');
     }
-    if (applied.sessionControls?.cloudAppSecurity !== undefined) {
+    if (sc?.cloudAppSecurity !== undefined) {
       descParts.push('Cloud App Security monitoring');
+    }
+    if (sc?.continuousAccessEvaluation !== undefined) {
+      descParts.push('continuous access evaluation');
+    }
+    if (sc?.applicationEnforcedRestrictions !== undefined) {
+      descParts.push('app enforced restrictions');
+    }
+    if (sc?.secureSignInSession !== undefined) {
+      descParts.push('token protection');
     }
 
     if (descParts.length === 0) continue;
@@ -583,7 +625,7 @@ function findOtherProtection(
     others.push({
       policyId: applied.policyId,
       policyName: applied.policyName,
-      controls: applied.grantControls?.controls ?? [],
+      controls: policyControls,
       description,
     });
   }
@@ -882,29 +924,35 @@ export function analyzeImpactSweep(
     // Representative scenario for qualitative fields
     let representativeIndex = -1;
 
-    for (let i = 0; i < totalScenarios; i++) {
-      if (!appliedScenarios.has(i)) {
-        // Policy didn't apply — result identical, use baseline score
-        withoutScoreSum += computePostureScore(baselineResults[i]);
-        continue;
-      }
+    if (isReportOnly) {
+      // Removing a report-only policy can never change decisions or controls —
+      // it never enters grant resolution. Skip the re-sweep entirely.
+      withoutScoreSum = baselineScoreSum;
+    } else {
+      for (let i = 0; i < totalScenarios; i++) {
+        if (!appliedScenarios.has(i)) {
+          // Policy didn't apply — result identical, use baseline score
+          withoutScoreSum += computePostureScore(baselineResults[i]);
+          continue;
+        }
 
-      // Re-evaluate without this policy
-      const withoutResult = engine.evaluate(withoutPolicies, scenarios[i]);
+        // Re-evaluate without this policy
+        const withoutResult = engine.evaluate(withoutPolicies, scenarios[i]);
 
-      withoutScoreSum += computePostureScore(withoutResult);
+        withoutScoreSum += computePostureScore(withoutResult);
 
-      const verdictChanged = baselineResults[i].finalDecision !== withoutResult.finalDecision;
-      const controlsChanged = !arraysEqual(
-        baselineResults[i].requiredControls,
-        withoutResult.requiredControls,
-      );
-      if (verdictChanged || controlsChanged) {
-        affectedScenarios++;
-        const userTypeIdx = Math.floor(i / scenariosPerUserType);
-        userTypeAffected[userTypeIdx]++;
-        if (representativeIndex === -1) {
-          representativeIndex = i;
+        const verdictChanged = baselineResults[i].finalDecision !== withoutResult.finalDecision;
+        const controlsChanged = !arraysEqual(
+          baselineResults[i].requiredControls,
+          withoutResult.requiredControls,
+        );
+        if (verdictChanged || controlsChanged) {
+          affectedScenarios++;
+          const userTypeIdx = Math.floor(i / scenariosPerUserType);
+          userTypeAffected[userTypeIdx]++;
+          if (representativeIndex === -1) {
+            representativeIndex = i;
+          }
         }
       }
     }
@@ -947,8 +995,9 @@ export function analyzeImpactSweep(
       const found = repResult.policyImpacts.find((p) => p.policyId === policy.id);
       singleImpact = found ?? buildNoImpactResult(policy, baselineResults[0]);
     } else {
-      // Non-applying policy
-      singleImpact = buildNoImpactResult(policy, baselineResults[0] ?? { finalDecision: 'allow', requiredControls: [], appliedPolicies: [], reportOnlyPolicies: [] } as unknown as CAEngineResult);
+      // Non-applying policy. The sweep always has scenarios (the dimension
+      // grid is fixed), so baselineResults[0] is always present.
+      singleImpact = buildNoImpactResult(policy, baselineResults[0]);
     }
 
     // Severity adjustment: sweep data can escalate but not downgrade
@@ -999,15 +1048,15 @@ function buildNoImpactResult(
     severity: 'low',
     verdictChange: null,
     controlsLost: [],
-    controlsRetained: [...(baselineResult.requiredControls ?? [])],
+    controlsRetained: [...baselineResult.requiredControls],
     gapsCreated: [],
     stillProtectedBy: [],
     otherProtectionActive: [],
     withoutResult: {
-      appliedCount: baselineResult.appliedPolicies?.length ?? 0,
-      reportOnlyCount: baselineResult.reportOnlyPolicies?.length ?? 0,
-      decision: baselineResult.finalDecision ?? 'allow',
-      requiredControls: [...(baselineResult.requiredControls ?? [])],
+      appliedCount: baselineResult.appliedPolicies.length,
+      reportOnlyCount: baselineResult.reportOnlyPolicies.length,
+      decision: baselineResult.finalDecision,
+      requiredControls: [...baselineResult.requiredControls],
     },
   };
 }

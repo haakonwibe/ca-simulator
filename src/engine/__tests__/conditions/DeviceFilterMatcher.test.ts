@@ -212,6 +212,127 @@ describe('DeviceFilterMatcher', () => {
   });
 
   // ──────────────────────────────────────────────
+  // Parenthesized expressions (canonical doc syntax)
+  // ──────────────────────────────────────────────
+  describe('parenthesized expressions', () => {
+    it('parses a single parenthesized expression', () => {
+      const ctx = deviceContext({}, { trustType: 'hybridAzureADJoined' });
+      const result = matcher.evaluate(ctx, includeFilter('(device.trustType -eq "ServerAD")'));
+
+      expect(result.matches).toBe(true);
+      expect(result.details?.parseError).toBeUndefined();
+    });
+
+    it('parses parenthesized expressions joined by -and', () => {
+      const ctx = deviceContext({ model: 'Surface Pro', manufacturer: 'Microsoft' });
+      const rule = '(device.manufacturer -eq "Microsoft") -and (device.model -startsWith "Surface")';
+
+      expect(matcher.evaluate(ctx, includeFilter(rule)).matches).toBe(true);
+    });
+
+    it('parses nested grouping with -and/-or precedence (-and binds tighter)', () => {
+      // a -or b -and c  ≡  a -or (b -and c)
+      const rule = 'device.model -eq "iPhone" -or device.manufacturer -eq "Microsoft" -and device.model -eq "Surface"';
+
+      expect(matcher.evaluate(deviceContext({ model: 'iPhone' }), includeFilter(rule)).matches).toBe(true);
+      expect(matcher.evaluate(deviceContext({ model: 'Surface', manufacturer: 'Microsoft' }), includeFilter(rule)).matches).toBe(true);
+      expect(matcher.evaluate(deviceContext({ model: 'Surface', manufacturer: 'Apple' }), includeFilter(rule)).matches).toBe(false);
+    });
+
+    it('explicit grouping overrides precedence', () => {
+      // (a -or b) -and c
+      const rule = '(device.model -eq "iPhone" -or device.model -eq "Surface") -and device.manufacturer -eq "Microsoft"';
+
+      expect(matcher.evaluate(deviceContext({ model: 'iPhone', manufacturer: 'Apple' }), includeFilter(rule)).matches).toBe(false);
+      expect(matcher.evaluate(deviceContext({ model: 'Surface', manufacturer: 'Microsoft' }), includeFilter(rule)).matches).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  // -or chains
+  // ──────────────────────────────────────────────
+  describe('-or expressions', () => {
+    it('matches when any branch is true', () => {
+      const ctx = deviceContext({ model: 'MacBook' });
+      const rule = 'device.model -eq "Surface" -or device.model -eq "MacBook"';
+
+      expect(matcher.evaluate(ctx, includeFilter(rule)).matches).toBe(true);
+    });
+
+    it('does not match when no branch is true', () => {
+      const ctx = deviceContext({ model: 'ThinkPad' });
+      const rule = 'device.model -eq "Surface" -or device.model -eq "MacBook"';
+
+      expect(matcher.evaluate(ctx, includeFilter(rule)).matches).toBe(false);
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  // Extended operator set
+  // ──────────────────────────────────────────────
+  describe('extended operators', () => {
+    it('-endsWith and -notEndsWith', () => {
+      const ctx = deviceContext({ displayName: 'LAPTOP-SALES-01' });
+
+      expect(matcher.evaluate(ctx, includeFilter('device.displayName -endsWith "01"')).matches).toBe(true);
+      expect(matcher.evaluate(ctx, includeFilter('device.displayName -notEndsWith "01"')).matches).toBe(false);
+    });
+
+    it('-notStartsWith', () => {
+      const ctx = deviceContext({ displayName: 'LAPTOP-SALES-01' });
+
+      expect(matcher.evaluate(ctx, includeFilter('device.displayName -notStartsWith "DESKTOP"')).matches).toBe(true);
+      expect(matcher.evaluate(ctx, includeFilter('device.displayName -notStartsWith "LAPTOP"')).matches).toBe(false);
+    });
+
+    it('-notIn with a bracketed list', () => {
+      const ctx = deviceContext({ model: 'ThinkPad' });
+
+      expect(matcher.evaluate(ctx, includeFilter('device.model -notIn ["Surface", "MacBook"]')).matches).toBe(true);
+      expect(matcher.evaluate(ctx, includeFilter('device.model -notIn ["ThinkPad", "MacBook"]')).matches).toBe(false);
+    });
+
+    it('-in list items containing spaces', () => {
+      const ctx = deviceContext({ model: 'Surface Pro 9' });
+
+      expect(matcher.evaluate(ctx, includeFilter('device.model -in ["Surface Pro 9", "Surface Laptop"]')).matches).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────────
+  // Missing properties — negative operators match
+  // ──────────────────────────────────────────────
+  describe('missing properties with negative operators', () => {
+    it('-ne matches a device without the property (unregistered device targeting)', () => {
+      const ctx = deviceContext({});
+
+      expect(matcher.evaluate(ctx, includeFilter('device.model -ne "Surface"')).matches).toBe(true);
+    });
+
+    it('-notContains and -notIn match a device without the property', () => {
+      const ctx = deviceContext({});
+
+      expect(matcher.evaluate(ctx, includeFilter('device.model -notContains "Surface"')).matches).toBe(true);
+      expect(matcher.evaluate(ctx, includeFilter('device.model -notIn ["Surface"]')).matches).toBe(true);
+    });
+
+    it('positive operators still do not match a missing property', () => {
+      const ctx = deviceContext({});
+
+      expect(matcher.evaluate(ctx, includeFilter('device.model -eq "Surface"')).matches).toBe(false);
+      expect(matcher.evaluate(ctx, includeFilter('device.model -contains "Surface"')).matches).toBe(false);
+    });
+
+    it('exclude-mode -ne filter excludes an unregistered device', () => {
+      const ctx = deviceContext({});
+      const result = matcher.evaluate(ctx, excludeFilter('device.model -ne "Surface"'));
+
+      expect(result.matches).toBe(false);
+      expect(result.phase).toBe('exclusion');
+    });
+  });
+
+  // ──────────────────────────────────────────────
   // Unparseable rules — fail open
   // ──────────────────────────────────────────────
   describe('unparseable rules', () => {
@@ -272,11 +393,24 @@ describe('DeviceFilterMatcher', () => {
       expect(result.matches).toBe(true);
     });
 
-    it('resolves device.trustType from DeviceContext', () => {
+    it('maps device.trustType to the Entra filter grammar vocabulary', () => {
+      // Filter rules use AzureAD/ServerAD/Workplace, not the join-type names
+      const azureAdJoined = deviceContext({}, { trustType: 'azureADJoined' });
+      expect(matcher.evaluate(azureAdJoined, includeFilter('device.trustType -eq "AzureAD"')).matches).toBe(true);
+
+      const hybridJoined = deviceContext({}, { trustType: 'hybridAzureADJoined' });
+      expect(matcher.evaluate(hybridJoined, includeFilter('device.trustType -eq "ServerAD"')).matches).toBe(true);
+      expect(matcher.evaluate(hybridJoined, includeFilter('device.trustType -eq "AzureAD"')).matches).toBe(false);
+
+      const registered = deviceContext({}, { trustType: 'azureADRegistered' });
+      expect(matcher.evaluate(registered, includeFilter('device.trustType -eq "Workplace"')).matches).toBe(true);
+    });
+
+    it('does not match join-type names in trustType rules', () => {
       const ctx = deviceContext({}, { trustType: 'azureADJoined' });
       const result = matcher.evaluate(ctx, includeFilter('device.trustType -eq "azureADJoined"'));
 
-      expect(result.matches).toBe(true);
+      expect(result.matches).toBe(false);
     });
   });
 

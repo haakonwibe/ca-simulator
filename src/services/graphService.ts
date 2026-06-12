@@ -146,21 +146,26 @@ async function resolveAppNames(token: string, appIds: string[]): Promise<Map<str
   // Filter to only unknown app IDs that look like GUIDs
   const unknownIds = appIds.filter(id => !map.has(id) && !SPECIAL_IDS.has(id));
 
-  // Resolve unknown app IDs via service principals
-  for (const appId of unknownIds) {
+  // Resolve unknown app IDs via service principals, batched with an `in`
+  // filter (Graph allows at most 15 values per `in` clause)
+  const IN_CLAUSE_LIMIT = 15;
+  for (let i = 0; i < unknownIds.length; i += IN_CLAUSE_LIMIT) {
+    const chunk = unknownIds.slice(i, i + IN_CLAUSE_LIMIT);
     try {
-      const safeId = appId.replace(/'/g, "''");
-      const filter = encodeURIComponent(`appId eq '${safeId}'`);
+      const idList = chunk.map(id => `'${id.replace(/'/g, "''")}'`).join(',');
+      const filter = encodeURIComponent(`appId in (${idList})`);
       const result = await graphFetch<{ value: Array<{ displayName: string; appId: string }> }>(
         `/servicePrincipals?$filter=${filter}&$select=displayName,appId`,
         token,
       );
-      if (result.value.length > 0) {
-        map.set(appId, result.value[0].displayName);
+      for (const sp of result.value) {
+        // Key by the ID as referenced in the policy (defends against casing drift)
+        const original = chunk.find(id => id.toLowerCase() === sp.appId.toLowerCase());
+        map.set(original ?? sp.appId, sp.displayName);
       }
     } catch (error) {
       if (error instanceof GraphPermissionError) throw error;
-      // If we can't resolve, leave it out — the UI will show the raw GUID
+      // If a chunk can't be resolved, leave its IDs out — the UI will show raw GUIDs
     }
   }
 
@@ -173,16 +178,18 @@ async function resolveAppNames(token: string, appIds: string[]): Promise<Map<str
 function extractReferencedIds(rawPolicies: RawGraphPolicy[]): {
   directoryObjectIds: string[];
   appIds: string[];
+  roleTemplateIds: string[];
 } {
   const dirIds = new Set<string>();
   const appIds = new Set<string>();
+  const roleIds = new Set<string>();
 
   for (const p of rawPolicies) {
     const cond = p.conditions ?? {};
     const users = cond.users ?? {};
     const apps = cond.applications ?? {};
 
-    // User/group/role IDs
+    // User/group IDs
     for (const id of users.includeUsers ?? []) {
       if (!SPECIAL_IDS.has(id)) dirIds.add(id);
     }
@@ -191,13 +198,13 @@ function extractReferencedIds(rawPolicies: RawGraphPolicy[]): {
     }
     for (const id of users.includeGroups ?? []) dirIds.add(id);
     for (const id of users.excludeGroups ?? []) dirIds.add(id);
-    // Roles are template IDs — resolved via WELL_KNOWN_ROLES, not directory objects
-    // But add them for display name resolution if not well-known
+    // Roles are TEMPLATE IDs — getByIds can't resolve them (it looks up role
+    // instance ids), so they get their own resolution via /directoryRoleTemplates
     for (const id of users.includeRoles ?? []) {
-      if (!WELL_KNOWN_ROLES[id]) dirIds.add(id);
+      if (!WELL_KNOWN_ROLES[id]) roleIds.add(id);
     }
     for (const id of users.excludeRoles ?? []) {
-      if (!WELL_KNOWN_ROLES[id]) dirIds.add(id);
+      if (!WELL_KNOWN_ROLES[id]) roleIds.add(id);
     }
 
     // App IDs
@@ -212,7 +219,27 @@ function extractReferencedIds(rawPolicies: RawGraphPolicy[]): {
   return {
     directoryObjectIds: [...dirIds],
     appIds: [...appIds],
+    roleTemplateIds: [...roleIds],
   };
+}
+
+/**
+ * Resolve role template IDs (beyond WELL_KNOWN_ROLES) to display names via
+ * /directoryRoleTemplates — its `id` IS the template id that CA policies store.
+ */
+async function resolveRoleTemplateNames(token: string, roleTemplateIds: string[]): Promise<Map<string, string>> {
+  const map = new Map<string, string>();
+  if (roleTemplateIds.length === 0) return map;
+
+  const wanted = new Set(roleTemplateIds);
+  const templates = await fetchAllPages<{ id: string; displayName?: string }>('/directoryRoleTemplates', token);
+  for (const template of templates) {
+    if (wanted.has(template.id) && template.displayName) {
+      map.set(template.id, template.displayName);
+    }
+  }
+
+  return map;
 }
 
 // ── 6. Normalizer — CRITICAL ────────────────────────────────────────
@@ -350,7 +377,9 @@ function normalizeAuthenticationFlows(
 function normalizeGrantControls(raw: Record<string, unknown> | null | undefined): GrantControls | null {
   if (!raw) return null;
   const builtIn = (raw.builtInControls as string[]) ?? [];
-  if (builtIn.length === 0 && !raw.authenticationStrength) return null;
+  const hasTermsOfUse = ((raw.termsOfUse as string[]) ?? []).length > 0;
+  const hasCustomFactors = ((raw.customAuthenticationFactors as string[]) ?? []).length > 0;
+  if (builtIn.length === 0 && !raw.authenticationStrength && !hasTermsOfUse && !hasCustomFactors) return null;
 
   const result: GrantControls = {
     operator: ((raw.operator as string) ?? 'AND').toUpperCase() as 'AND' | 'OR',
@@ -563,7 +592,7 @@ export function mergeApplicationSources(
  * Fetch tenant applications from two Graph API sources and merge with
  * policy-referenced apps into a single deduplicated list.
  *
- * @param token - Bearer token with Application.Read.All scope
+ * @param token - Bearer token with Directory.Read.All scope
  * @param policyAppIds - Map of appId → displayName from policy extraction + resolution
  * @returns Sorted, deduplicated array of tenant applications (excludes bundle members)
  */
@@ -574,15 +603,15 @@ export async function fetchTenantApplications(
   let enterpriseApps: Array<{ appId: string; displayName: string }> = [];
   let appRegistrations: Array<{ appId: string; displayName: string }> = [];
 
-  // Fetch both sources in parallel — resilient to partial failure
+  // Fetch both sources in parallel, following pagination — resilient to partial failure
   const [enterpriseResult, registrationResult] = await Promise.allSettled([
-    graphFetch<{ value: Array<{ appId: string; displayName: string }> }>(
-      `/servicePrincipals?$filter=${encodeURIComponent("servicePrincipalType eq 'Application' and not(appOwnerOrganizationId eq f8cdef31-a31e-4b4a-93e4-5f571e91255a)")}&$select=appId,displayName&$top=50&$count=true`,
+    fetchAllPages<{ appId: string; displayName: string }>(
+      `/servicePrincipals?$filter=${encodeURIComponent("servicePrincipalType eq 'Application' and not(appOwnerOrganizationId eq f8cdef31-a31e-4b4a-93e4-5f571e91255a)")}&$select=appId,displayName&$top=999&$count=true`,
       token,
       { 'ConsistencyLevel': 'eventual' },
     ),
-    graphFetch<{ value: Array<{ appId: string; displayName: string }> }>(
-      '/applications?$select=appId,displayName&$top=50',
+    fetchAllPages<{ appId: string; displayName: string }>(
+      '/applications?$select=appId,displayName&$top=999',
       token,
     ),
   ]);
@@ -591,13 +620,13 @@ export async function fetchTenantApplications(
   if (enterpriseResult.status === 'rejected') {
     if (enterpriseResult.reason instanceof GraphPermissionError) throw enterpriseResult.reason;
   } else {
-    enterpriseApps = enterpriseResult.value.value;
+    enterpriseApps = enterpriseResult.value;
   }
 
   if (registrationResult.status === 'rejected') {
     if (registrationResult.reason instanceof GraphPermissionError) throw registrationResult.reason;
   } else {
-    appRegistrations = registrationResult.value.value;
+    appRegistrations = registrationResult.value;
   }
 
   return mergeApplicationSources(enterpriseApps, appRegistrations, policyAppIds);
@@ -616,19 +645,26 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   const [rawPolicies, namedLocations, authStrengthMap] = await Promise.all([
     fetchPolicies(token),
     fetchNamedLocations(token),
-    fetchAuthStrengthPolicies(token).catch(() => new Map<string, number>()),
+    // Re-throw 403 (ConsentBanner); other failures degrade to an empty map,
+    // which makes custom auth strengths unsatisfiable in simulations
+    fetchAuthStrengthPolicies(token).catch((error) => {
+      if (error instanceof GraphPermissionError) throw error;
+      return new Map<string, number>();
+    }),
   ]);
 
   // Extract all referenced GUIDs
-  const { directoryObjectIds, appIds } = extractReferencedIds(rawPolicies);
+  const { directoryObjectIds, appIds, roleTemplateIds } = extractReferencedIds(rawPolicies);
 
   // Resolve GUIDs in parallel — re-throw 403 so the store can show ConsentBanner
   let directoryObjectNames = new Map<string, string>();
   let appNames = new Map<string, string>();
+  let roleTemplateNames = new Map<string, string>();
   try {
-    [directoryObjectNames, appNames] = await Promise.all([
+    [directoryObjectNames, appNames, roleTemplateNames] = await Promise.all([
       resolveDirectoryObjects(token, directoryObjectIds),
       resolveAppNames(token, appIds),
+      resolveRoleTemplateNames(token, roleTemplateIds),
     ]);
   } catch (error) {
     if (error instanceof GraphPermissionError) throw error;
@@ -647,6 +683,7 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   for (const [id, name] of directoryObjectNames) displayNames.set(id, name);
   for (const [id, name] of appNames) displayNames.set(id, name);
   for (const [id, name] of Object.entries(WELL_KNOWN_ROLES)) displayNames.set(id, name);
+  for (const [id, name] of roleTemplateNames) displayNames.set(id, name);
   for (const [id, info] of namedLocations) displayNames.set(id, info.displayName);
 
   // Normalize raw Graph data into engine-ready policies

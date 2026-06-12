@@ -158,7 +158,7 @@ export function Header() {
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={isLoading}>
             <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-normal transition-colors hover:bg-accent/50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
-              style={{ borderColor: dataSource === 'sample' ? 'rgba(96,165,250,0.5)' : COLORS.border }}
+              style={{ borderColor: dataSource === 'sample' ? COLORS.accentLightFaded : COLORS.border }}
             >
               {isLoading ? (
                 <>
@@ -167,8 +167,8 @@ export function Header() {
                 </>
               ) : dataSource === 'sample' ? (
                 <>
-                  <FlaskConical className="h-3 w-3 text-blue-400" />
-                  <span className="text-blue-400">Demo Mode</span>
+                  <FlaskConical className="h-3 w-3" style={{ color: COLORS.accentLight }} />
+                  <span style={{ color: COLORS.accentLight }}>Demo Mode</span>
                 </>
               ) : tenantName ? (
                 <>

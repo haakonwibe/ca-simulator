@@ -4,7 +4,7 @@ import type { PolicyState } from './Policy';
 
 /** Shape produced by PolicyEvaluator.extractSessionControls() — typed boundary between extraction and aggregation. */
 export interface ExtractedSessionControls {
-  signInFrequency?: { value: number; type: 'hours' | 'days' };
+  signInFrequency?: { value: number; type: 'hours' | 'days'; frequencyInterval: string };
   persistentBrowser?: 'always' | 'never';
   cloudAppSecurity?: string;
   continuousAccessEvaluation?: string;

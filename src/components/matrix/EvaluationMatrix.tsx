@@ -34,7 +34,7 @@ import {
 const CELL_BG: Record<CellState, string> = {
   match: COLORS.grantedBg,
   fail: COLORS.blockedBg,
-  excluded: 'rgba(59, 130, 246, 0.06)',
+  excluded: COLORS.selectedBg,
   notConfigured: 'transparent',
   notEvaluated: 'transparent',
   disabled: 'transparent',
@@ -264,7 +264,7 @@ function MatrixRow({
     : COLORS.border;
 
   const rowBg = isSelected
-    ? 'rgba(59, 130, 246, 0.06)'
+    ? COLORS.selectedBg
     : isEven
       ? COLORS.bgPanel
       : COLORS.bgCard;
@@ -288,7 +288,6 @@ function MatrixRow({
       style={{
         cursor: 'pointer',
         opacity,
-        borderLeft: `3px solid ${leftBorderColor}`,
       }}
       onMouseEnter={(e) => {
         const cells = e.currentTarget.querySelectorAll('td');
@@ -303,14 +302,16 @@ function MatrixRow({
         });
       }}
     >
-      {/* Policy name — sticky left */}
+      {/* Policy name — sticky left. The verdict color strip lives on this cell:
+          borders on <tr> are ignored under border-collapse: separate. */}
       <td
         style={{
           ...STICKY_LEFT,
           padding: '5px 8px',
           borderBottom: `1px solid ${COLORS.border}`,
           borderRight: `1px solid ${COLORS.border}`,
-          backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.06)' : (isEven ? COLORS.bgPanel : COLORS.bgCard),
+          borderLeft: `3px solid ${leftBorderColor}`,
+          backgroundColor: isSelected ? COLORS.selectedBg : (isEven ? COLORS.bgPanel : COLORS.bgCard),
         }}
       >
         <div className="flex items-center gap-2">
@@ -519,7 +520,7 @@ function VerdictCell({
   isEven: boolean;
 }) {
   const stickyBg = isSelected
-    ? 'rgba(59, 130, 246, 0.06)'
+    ? COLORS.selectedBg
     : isEven
       ? COLORS.bgPanel
       : COLORS.bgCard;

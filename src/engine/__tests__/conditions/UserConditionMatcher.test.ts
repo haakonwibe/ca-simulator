@@ -153,6 +153,32 @@ describe('UserConditionMatcher', () => {
   });
 
   // ──────────────────────────────────────────────
+  // GuestsOrExternalUsers exclusion (legacy sentinel)
+  // ──────────────────────────────────────────────
+  describe('GuestsOrExternalUsers exclusion', () => {
+    it('excludes guest users when excludeUsers contains "GuestsOrExternalUsers" (exclusion wins over include All)', () => {
+      const condition = createUserCondition({
+        includeUsers: ['All'],
+        excludeUsers: ['GuestsOrExternalUsers'],
+      });
+      const result = matcher.evaluate(GUEST_USER_CONTEXT, condition);
+
+      expect(result.matches).toBe(false);
+      expect(result.phase).toBe('exclusion');
+    });
+
+    it('does not exclude member users via "GuestsOrExternalUsers"', () => {
+      const condition = createUserCondition({
+        includeUsers: ['All'],
+        excludeUsers: ['GuestsOrExternalUsers'],
+      });
+      const result = matcher.evaluate(STANDARD_USER_CONTEXT, condition);
+
+      expect(result.matches).toBe(true);
+    });
+  });
+
+  // ──────────────────────────────────────────────
   // Granular guest/external user inclusion
   // ──────────────────────────────────────────────
   describe('granular guest/external user inclusion', () => {

@@ -20,7 +20,10 @@ interface PersonaState {
   resolvedPersonas: Map<string, UserContext>;
   // Currently selected persona for simulation
   selectedPersonaId: string | null;
+  /** True while ANY resolution is in flight (counter-backed — concurrent
+   * resolutions for different users don't clear each other's loading state) */
   isResolving: boolean;
+  resolvingCount: number;
   error: string | null;
 
   // Actions
@@ -38,6 +41,7 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
   resolvedPersonas: new Map(),
   selectedPersonaId: null,
   isResolving: false,
+  resolvingCount: 0,
   error: null,
 
   searchUsers: async (query: string) => {
@@ -75,7 +79,7 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
     if (pending) return pending;
 
     const promise = (async () => {
-      set({ isResolving: true, error: null });
+      set((s) => ({ resolvingCount: s.resolvingCount + 1, isResolving: true, error: null }));
       try {
         const token = await getAccessToken();
         const context = await resolveUserContext(token, userId);
@@ -84,7 +88,6 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
         set({
           resolvedPersonas: updated,
           selectedPersonaId: userId,
-          isResolving: false,
         });
         return context;
       } catch (error) {
@@ -92,9 +95,13 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
           error instanceof GraphPermissionError
             ? ADMIN_CONSENT_ERROR
             : error instanceof Error ? error.message : 'Failed to resolve user';
-        set({ isResolving: false, error: errorMessage });
+        set({ error: errorMessage });
         throw error;
       } finally {
+        set((s) => {
+          const resolvingCount = s.resolvingCount - 1;
+          return { resolvingCount, isResolving: resolvingCount > 0 };
+        });
         inflight.delete(userId);
       }
     })();

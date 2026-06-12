@@ -88,6 +88,7 @@ export const usePolicyStore = create<PolicyState>((set) => ({
       displayNames,
       authStrengthMap: sampleAuthStrengthMap,
       tenantApplications: sampleTenantApps,
+      tenantName: null,
       isLoading: false,
       error: null,
       dataSource: 'sample',

@@ -1,7 +1,7 @@
 // engine/conditions/ClientAppMatcher.ts
 
 import type { ConditionMatcher } from './ConditionMatcher';
-import type { ClientAppType } from '../models/Policy';
+import type { PolicyClientAppType } from '../models/Policy';
 import type { ConditionMatchResult } from '../models/EvaluationResult';
 import type { SimulationContext } from '../models/SimulationContext';
 
@@ -14,8 +14,8 @@ import type { SimulationContext } from '../models/SimulationContext';
  * - Empty clientAppTypes array → matches ALL client app types
  * - This is the most common mistake: missing this default causes policies to silently not match.
  */
-export class ClientAppMatcher implements ConditionMatcher<ClientAppType[]> {
-  evaluate(context: SimulationContext, condition: ClientAppType[]): ConditionMatchResult {
+export class ClientAppMatcher implements ConditionMatcher<PolicyClientAppType[]> {
+  evaluate(context: SimulationContext, condition: PolicyClientAppType[]): ConditionMatchResult {
     // Empty array = unconfigured = matches all client app types
     if (condition.length === 0) {
       return {
@@ -26,9 +26,8 @@ export class ClientAppMatcher implements ConditionMatcher<ClientAppType[]> {
       };
     }
 
-    // Check for 'all' keyword (treated same as empty: matches everything)
-    // Graph API may use 'all' as an explicit value
-    if ((condition as string[]).includes('all')) {
+    // 'all' keyword (treated same as empty: matches everything)
+    if (condition.includes('all')) {
       return {
         conditionType: 'clientAppTypes',
         matches: true,

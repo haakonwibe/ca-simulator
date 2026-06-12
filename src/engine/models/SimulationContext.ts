@@ -53,7 +53,6 @@ export interface LocationContext {
   /** Named location ID if resolved */
   namedLocationId?: string;
   isTrustedLocation?: boolean;
-  countryCode?: string;
 }
 
 export interface RiskContext {

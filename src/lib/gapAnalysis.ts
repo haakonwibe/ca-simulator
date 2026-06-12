@@ -5,6 +5,7 @@ import { CAEngine } from '@/engine/CAEngine';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { SimulationContext, UserContext } from '@/engine/models/SimulationContext';
 import type { CAEngineResult } from '@/engine/models/EvaluationResult';
+import { deriveGuaranteedControls } from './guaranteedControls';
 import {
   SWEEP_USER_TYPES,
   SWEEP_APPS,
@@ -42,7 +43,6 @@ export interface GapDisagreement {
 export interface GapResult {
   severity: GapSeverity;
   gapType: GapType;
-  userType: string;
   application: string;
   platform: string;
   clientApp: string;
@@ -61,7 +61,6 @@ export interface GapResult {
 export interface GapGroup {
   severity: GapSeverity;
   gapType: GapType;
-  userType: string;
   application: string;
   reason: string;
   platforms: string[];
@@ -91,7 +90,7 @@ function classifyResult(
   reportOnlyCount: number,
   clientAppType?: string,
 ): GapClassification[] {
-  const { finalDecision, appliedPolicies, requiredControls } = result;
+  const { finalDecision, appliedPolicies } = result;
 
   // Block verdict → fully covered, no gaps
   if (finalDecision === 'block') return [];
@@ -114,10 +113,20 @@ function classifyResult(
     }];
   }
 
-  // Enforced policies exist — check MFA and device compliance independently
-  const hasMfa = requiredControls.includes('mfa') ||
-    requiredControls.some(c => c.startsWith('authenticationStrength:'));
-  const hasCompliantDevice = requiredControls.includes('compliantDevice');
+  // Enforced policies exist — check MFA and device compliance independently.
+  // Only controls that are GUARANTEED count: a policy requiring
+  // "mfa OR compliantDevice" guarantees neither individually.
+  const { guaranteed, alternativeSets } = deriveGuaranteedControls(appliedPolicies);
+  const satisfiesMfa = (c: string) => c === 'mfa' || c.startsWith('authenticationStrength:');
+  const satisfiesDevice = (c: string) => c === 'compliantDevice';
+
+  const hasMfa = [...guaranteed].some(satisfiesMfa);
+  const hasCompliantDevice = [...guaranteed].some(satisfiesDevice);
+  const mfaIsAlternative = !hasMfa && alternativeSets.some(set => set.some(satisfiesMfa));
+  const deviceIsAlternative = !hasCompliantDevice && alternativeSets.some(set => set.some(satisfiesDevice));
+  // An OR set where EVERY alternative is mfa-or-device still guarantees "one of the two"
+  const hasMfaOrDevice = hasMfa || hasCompliantDevice ||
+    alternativeSets.some(set => set.every(c => satisfiesMfa(c) || satisfiesDevice(c)));
   const isLegacy = clientAppType ? LEGACY_CLIENT_APPS.has(clientAppType) : false;
 
   // Both present and not legacy → fully covered
@@ -129,7 +138,9 @@ function classifyResult(
     classifications.push({
       severity: 'warning',
       gapType: 'no-mfa',
-      reason: 'No MFA required — policies apply but none enforce multi-factor authentication',
+      reason: mfaIsAlternative
+        ? 'MFA not guaranteed — it is only one alternative in an OR grant; a sign-in can complete without MFA'
+        : 'No MFA required — policies apply but none enforce multi-factor authentication',
     });
   }
 
@@ -137,12 +148,14 @@ function classifyResult(
     classifications.push({
       severity: 'warning',
       gapType: 'no-device-compliance',
-      reason: 'No compliant device required — policies apply but none enforce device compliance',
+      reason: deviceIsAlternative
+        ? 'Device compliance not guaranteed — it is only one alternative in an OR grant; a sign-in can complete without a compliant device'
+        : 'No compliant device required — policies apply but none enforce device compliance',
     });
   }
 
-  // Caution only when BOTH are missing
-  if (!hasMfa && !hasCompliantDevice) {
+  // Caution only when not even "one of MFA / compliant device" is guaranteed
+  if (!hasMfaOrDevice) {
     classifications.push({
       severity: 'caution',
       gapType: 'no-mfa-or-device',
@@ -247,7 +260,6 @@ export function analyzeGaps(
                   gaps.push({
                     severity: classification.severity,
                     gapType: classification.gapType,
-                    userType: personaName,
                     application: APP_DISPLAY_NAMES[app],
                     platform,
                     clientApp,
@@ -271,12 +283,12 @@ export function analyzeGaps(
     }
   }
 
-  // Sort: critical > warning > caution > info; within same severity by user type then app
+  // Sort: critical > warning > caution > info; within same severity by persona then app
   const severityOrder: Record<GapSeverity, number> = { critical: 0, warning: 1, caution: 2, info: 3 };
   gaps.sort((a, b) => {
     const sevDiff = severityOrder[a.severity] - severityOrder[b.severity];
     if (sevDiff !== 0) return sevDiff;
-    const userDiff = a.userType.localeCompare(b.userType);
+    const userDiff = a.personaName.localeCompare(b.personaName);
     if (userDiff !== 0) return userDiff;
     return a.application.localeCompare(b.application);
   });
@@ -297,7 +309,6 @@ export function groupGaps(gaps: GapResult[]): GapGroup[] {
       group = {
         severity: gap.severity,
         gapType: gap.gapType,
-        userType: gap.userType,
         application: gap.application,
         reason: gap.reason,
         platforms: [],
@@ -328,7 +339,7 @@ export function groupGaps(gaps: GapResult[]): GapGroup[] {
   groups.sort((a, b) => {
     const sevDiff = severityOrder[a.severity] - severityOrder[b.severity];
     if (sevDiff !== 0) return sevDiff;
-    const userDiff = a.userType.localeCompare(b.userType);
+    const userDiff = a.personaName.localeCompare(b.personaName);
     if (userDiff !== 0) return userDiff;
     return a.application.localeCompare(b.application);
   });

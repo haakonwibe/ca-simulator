@@ -17,12 +17,42 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.4.3',
+    subtitle: 'Accuracy & Analysis Refinements',
+    features: [
+      {
+        heading: 'Full Device Filter Support',
+        body: 'Device filter rules now support the complete grammar — parentheses, -and/-or combinations, and all ten operators — bringing evaluation in line with Entra behavior, including how unregistered devices are handled.',
+      },
+      {
+        heading: 'More Grant Controls',
+        body: 'Terms of Use and custom authentication factors are now recognized as grant controls and shown in evaluation results, and every-time sign-in frequency is carried through to the verdict.',
+      },
+      {
+        heading: 'Sharper Gap & Impact Analysis',
+        body: 'Analysis sweeps now distinguish controls a policy guarantees from OR alternatives it merely offers, credit session-only policies, and scope the all-apps dimension more precisely. Sweeps also complete faster on larger tenants. Numbers may shift compared to earlier versions — the new results reflect the corrected semantics.',
+      },
+      {
+        heading: 'Complete App Discovery',
+        body: 'Application discovery now retrieves the full list of enterprise apps and app registrations from larger tenants, and directory role names are resolved for policies targeting roles.',
+      },
+      {
+        heading: 'Reduced Permissions',
+        body: 'The delegated permission set has been trimmed to Policy.Read.All and Directory.Read.All — the simulator now requests only what it needs.',
+      },
+      {
+        heading: 'UI Refinements',
+        body: 'The Sankey view renders reliably on first visit, scenario settings persist when switching between views, user search handles rapid typing cleanly, and category icons have been refreshed.',
+      },
+    ],
+  },
+  {
     version: 'v0.4.2',
     subtitle: 'Startup Reliability',
     features: [
       {
-        heading: 'Fixed Blank Page on Startup',
-        body: 'The app no longer requires MSAL authentication to render. Previously, if VITE_MSAL_CLIENT_ID was missing or MSAL initialization failed, the entire page would be blank. Now the app always mounts and sample mode works with zero configuration. MSAL initializes on-demand when you click Sign In.',
+        heading: 'Improved Startup Reliability',
+        body: 'The app now renders immediately without waiting for authentication. Sample mode works with zero configuration, and MSAL initializes on-demand when you click Sign In.',
       },
     ],
   },

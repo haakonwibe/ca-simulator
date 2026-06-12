@@ -11,10 +11,7 @@ import {
 
 const PERMISSIONS = [
   { name: 'Policy.Read.All', desc: 'Read Conditional Access policies' },
-  { name: 'Application.Read.All', desc: 'Resolve application names' },
-  { name: 'Directory.Read.All', desc: 'Resolve users, groups, and roles' },
-  { name: 'User.Read.All', desc: 'Search users for persona mapping' },
-  { name: 'GroupMember.Read.All', desc: 'Resolve group memberships' },
+  { name: 'Directory.Read.All', desc: 'Resolve users, groups, roles, and applications' },
 ];
 
 export function AboutDialog({

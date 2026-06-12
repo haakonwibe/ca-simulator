@@ -30,11 +30,9 @@ export function LimitationsDialog({
           <Section title="Simplified matching">
             <ul className="space-y-2 mt-1">
               <LimitationItem>
-                <strong>Device Filter rules</strong> — Complex device filter expressions (e.g.{' '}
-                <code className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: COLORS.accent }}>
-                  device.model -startsWith "Surface"
-                </code>
-                ) use simplified matching. A full expression parser is planned.
+                <strong>Device Filter rules</strong> — The full filter grammar is supported
+                (parentheses, -and/-or, all ten operators). Rules that still fail to parse
+                are treated as matching so the policy is not silently skipped.
               </LimitationItem>
               <LimitationItem>
                 <strong>Authentication Strength</strong> — Built-in and custom strengths are
@@ -74,9 +72,11 @@ export function LimitationsDialog({
                 (servicePrincipalRiskLevels) are not evaluated.
               </LimitationItem>
               <LimitationItem>
-                Guest and external user sub-type matching handles common types
-                (b2bCollaborationGuest) but granular tenant-scoped external user conditions may
-                not fully evaluate.
+                <strong>Live guest users</strong> — Guests resolved from a live tenant are
+                always classified as b2bCollaborationGuest (B2B direct connect, internal
+                guests, and service provider users are not distinguished), and their home
+                tenant ID is not resolved. Policies scoped to specific external tenants
+                will therefore never match live guest personas.
               </LimitationItem>
               <LimitationItem>
                 Named location matching requires manual selection (Trusted/Untrusted) — no

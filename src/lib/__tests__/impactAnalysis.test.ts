@@ -1,9 +1,10 @@
 // lib/__tests__/impactAnalysis.test.ts — Impact analysis engine tests.
 
 import { describe, it, expect } from 'vitest';
+import { CAEngine } from '@/engine/CAEngine';
 import { analyzeImpact, analyzeImpactSweep, describeVerdict, computePostureScore, MAX_POSTURE_SCORE } from '../impactAnalysis';
 import type { ImpactSeverity } from '../impactAnalysis';
-import type { CAEngineResult } from '@/engine/models/EvaluationResult';
+import type { CAEngineResult, PolicyEvaluationResult } from '@/engine/models/EvaluationResult';
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
 import type { SimulationContext, UserContext } from '@/engine/models/SimulationContext';
 
@@ -958,11 +959,38 @@ describe('describeVerdict', () => {
 // ── Posture scoring ──
 
 function createEngineResult(overrides?: Partial<CAEngineResult>): CAEngineResult {
+  // Posture scoring derives from per-policy operator info, so synthesize one
+  // applied AND policy that guarantees all of requiredControls.
+  const required = overrides?.requiredControls ?? ['mfa'];
+  const builtIn = required.filter((c) => !c.startsWith('authenticationStrength:'));
+  const strengthLabel = required.find((c) => c.startsWith('authenticationStrength:'));
+  const appliedPolicies: PolicyEvaluationResult[] = required.length > 0 ? [{
+    policyId: 'test-policy',
+    policyName: 'Test Policy',
+    state: 'enabled',
+    applies: true,
+    conditionResults: [],
+    grantControls: {
+      operator: 'AND',
+      controls: builtIn,
+      satisfied: false,
+      satisfiedControls: [],
+      unsatisfiedControls: builtIn,
+      authenticationStrength: strengthLabel
+        ? {
+            displayName: strengthLabel.substring('authenticationStrength:'.length),
+            policyStrengthId: 'strength-1',
+            satisfied: false,
+          }
+        : undefined,
+    },
+  }] : [];
+
   return {
     finalDecision: 'controlsRequired',
-    requiredControls: ['mfa'],
+    requiredControls: required,
     satisfiedControls: [],
-    appliedPolicies: [],
+    appliedPolicies,
     skippedPolicies: [],
     reportOnlyPolicies: [],
     sessionControls: {},
@@ -1030,7 +1058,7 @@ describe('computePostureScore', () => {
   });
 
   it('sweep coverage uses weighted scores — removing auth strength shows coverage decrease', () => {
-    // Policy A: auth strength (5pts). Policy B: MFA only (3pts).
+    // Policy A: auth strength only (5pts, guaranteed). Policy B: MFA only (3pts).
     // With both: auth strength wins → 5pts per scenario.
     // Without A: MFA only → 3pts per scenario. Coverage should decrease.
     const policies = [
@@ -1039,7 +1067,7 @@ describe('computePostureScore', () => {
         displayName: 'Auth Strength Policy',
         grantControls: {
           operator: 'OR',
-          builtInControls: ['mfa'],
+          builtInControls: [],
           authenticationStrength: {
             id: 'strength-1',
             displayName: 'Phishing-resistant MFA',
@@ -1059,5 +1087,20 @@ describe('computePostureScore', () => {
     expect(strengthImpact).toBeDefined();
     // Coverage should drop because weighted score drops from 5 to 3 per scenario
     expect(strengthImpact!.coverageBefore).toBeGreaterThan(strengthImpact!.coverageAfter);
+  });
+
+  it('an OR grant with multiple alternatives scores at its weakest alternative', () => {
+    // "mfa OR compliantDevice" — a sign-in can complete with either alone, so
+    // the guaranteed posture is min(mfa, compliantDevice) = 3, not 3 + 3.
+    const policies = [
+      createPolicy({
+        id: 'or-policy',
+        displayName: 'MFA or Compliant Device',
+        grantControls: { operator: 'OR', builtInControls: ['mfa', 'compliantDevice'] },
+      }),
+    ];
+    const engineResult = new CAEngine().evaluate(policies, createContext());
+
+    expect(computePostureScore(engineResult)).toBe(3);
   });
 });

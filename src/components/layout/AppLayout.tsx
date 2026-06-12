@@ -14,7 +14,11 @@ export function AppLayout() {
       <MobileNotice />
       <Header />
       <div className="flex flex-1 overflow-hidden">
-        {showSidebar && <Sidebar />}
+        {/* Hide (not unmount) for full-area views — ScenarioPanel's form state
+            is local useState and must survive switching to Gaps/Impact */}
+        <div className={showSidebar ? 'contents' : 'hidden'}>
+          <Sidebar />
+        </div>
         <MainContent />
       </div>
       <footer

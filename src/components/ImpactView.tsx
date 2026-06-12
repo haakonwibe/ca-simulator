@@ -37,10 +37,10 @@ import {
 // ── Severity styling ──
 
 const SEVERITY_CONFIG: Record<ImpactSeverity, { label: string; color: string; bg: string; border: string }> = {
-  critical: { label: 'CRITICAL', color: COLORS.blocked, bg: COLORS.blockedBg, border: 'rgba(239, 68, 68, 0.3)' },
-  high: { label: 'HIGH', color: COLORS.unsatisfied, bg: COLORS.unsatisfiedBg, border: 'rgba(249, 115, 22, 0.3)' },
-  medium: { label: 'MEDIUM', color: COLORS.mfa, bg: COLORS.mfaBg, border: 'rgba(245, 158, 11, 0.3)' },
-  low: { label: 'LOW', color: COLORS.reportOnly, bg: COLORS.reportOnlyBg, border: 'rgba(59, 130, 246, 0.3)' },
+  critical: { label: 'CRITICAL', color: COLORS.blocked, bg: COLORS.blockedBg, border: COLORS.blockedBorder },
+  high: { label: 'HIGH', color: COLORS.unsatisfied, bg: COLORS.unsatisfiedBg, border: COLORS.unsatisfiedBorder },
+  medium: { label: 'MEDIUM', color: COLORS.mfa, bg: COLORS.mfaBg, border: COLORS.mfaBorder },
+  low: { label: 'LOW', color: COLORS.reportOnly, bg: COLORS.reportOnlyBg, border: COLORS.accentGlow },
 };
 
 const VERDICT_COLORS: Record<string, string> = {

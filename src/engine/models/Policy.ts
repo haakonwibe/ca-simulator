@@ -20,7 +20,7 @@ export interface PolicyConditions {
   applications: ApplicationCondition;
   platforms?: PlatformCondition;
   locations?: LocationCondition;
-  clientAppTypes: ClientAppType[];
+  clientAppTypes: PolicyClientAppType[];
   signInRiskLevels: RiskLevel[];
   userRiskLevels: RiskLevel[];
   devices?: DeviceFilterCondition;
@@ -79,6 +79,8 @@ export interface DeviceFilterCondition {
 }
 
 export type ClientAppType = 'browser' | 'mobileAppsAndDesktopClients' | 'exchangeActiveSync' | 'other';
+/** Policy condition values — Graph returns ['all'] for unconfigured client app types on modern policies. */
+export type PolicyClientAppType = ClientAppType | 'all';
 export type RiskLevel = 'low' | 'medium' | 'high' | 'none';
 export type InsiderRiskLevel = 'minor' | 'moderate' | 'elevated';
 

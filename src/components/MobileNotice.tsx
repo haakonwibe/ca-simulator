@@ -11,11 +11,12 @@ export function MobileNotice() {
   const [show, setShow] = useState(false);
 
   useEffect(() => {
-    const dismissed = sessionStorage.getItem(STORAGE_KEY);
-    if (dismissed) return;
+    if (sessionStorage.getItem(STORAGE_KEY)) return;
 
     const mq = window.matchMedia('(max-width: 767px)');
-    const update = () => setShow(mq.matches);
+    // Re-check the dismissal flag on every change — crossing the breakpoint
+    // after "Continue anyway" must not re-show the overlay
+    const update = () => setShow(mq.matches && !sessionStorage.getItem(STORAGE_KEY));
     update();
     mq.addEventListener('change', update);
     return () => mq.removeEventListener('change', update);

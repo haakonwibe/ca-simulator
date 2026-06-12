@@ -331,7 +331,7 @@ function PolicyCard({
         borderLeftWidth: 3,
         borderLeftColor: borderColor,
         ...(isSelected && {
-          backgroundColor: 'rgba(59, 130, 246, 0.06)',
+          backgroundColor: COLORS.selectedBg,
           boxShadow: `0 0 0 1px ${COLORS.borderActive}`,
         }),
       }}
@@ -592,7 +592,9 @@ function SessionControlsSection({
       ? (freq.value === 1 ? 'hour' : 'hours')
       : (freq.value === 1 ? 'day' : 'days');
     entries.push({
-      label: `Sign-in every ${freq.value} ${unit}`,
+      label: freq.frequencyInterval === 'everyTime'
+        ? 'Sign-in every time (no time window)'
+        : `Sign-in every ${freq.value} ${unit}`,
       source: freq.source,
     });
   }
@@ -765,7 +767,7 @@ function SkippedPolicyRow({
       className="rounded-md border px-3 py-2"
       style={{
         borderColor: isSelected ? COLORS.borderActive : COLORS.notApplicable,
-        backgroundColor: isSelected ? 'rgba(59, 130, 246, 0.06)' : COLORS.notApplicableBg,
+        backgroundColor: isSelected ? COLORS.selectedBg : COLORS.notApplicableBg,
         ...(isSelected && { boxShadow: `0 0 0 1px ${COLORS.borderActive}` }),
       }}
     >

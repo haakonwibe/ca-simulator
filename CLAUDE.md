@@ -93,7 +93,7 @@ Auth handled by MSAL's `MsalProvider` + `useMsal()` hook (no separate store). Sc
 
 ## Testing
 
-All 459 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, and `src/services/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, and impact analysis. Tests use real policy structures and contexts — no mocking of the engine.
+All 485 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, and `src/services/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, and impact analysis. Tests use real policy structures and contexts — no mocking of the engine.
 
 ## Environment
 

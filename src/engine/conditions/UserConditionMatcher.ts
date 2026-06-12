@@ -51,6 +51,18 @@ export class UserConditionMatcher implements ConditionMatcher<UserCondition> {
       };
     }
 
+    // Legacy "GuestsOrExternalUsers" sentinel in excludeUsers (older policies
+    // store it as a string entry rather than the granular object condition)
+    if (condition.excludeUsers.includes('GuestsOrExternalUsers') && user.userType === 'guest') {
+      return {
+        conditionType: 'users',
+        matches: false,
+        reason: `User "${user.displayName}" is excluded via "GuestsOrExternalUsers" (userType: guest)`,
+        phase: 'exclusion',
+        details: { excludedAsGuestType: 'GuestsOrExternalUsers' },
+      };
+    }
+
     // Exclude by group membership
     for (const excludedGroupId of condition.excludeGroups) {
       if (user.memberOfGroupIds.includes(excludedGroupId)) {
@@ -186,7 +198,7 @@ export class UserConditionMatcher implements ConditionMatcher<UserCondition> {
     // If no inclusion criteria matched, user does not match
     // Note: truly unconfigured conditions (empty everything) should not reach here
     // because policies always have user conditions configured in practice.
-    // But if they do, a fully empty condition is treated as "no one targeted".
+    // But if they do, a fully empty condition matches everyone (Golden Rule #2).
     const hasAnyInclusion =
       condition.includeUsers.length > 0 ||
       condition.includeGroups.length > 0 ||

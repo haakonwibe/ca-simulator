@@ -118,10 +118,11 @@ function PanelHeader({
           </Badge>
           <Badge
             variant="outline"
-            className="text-[10px] px-1.5 py-0"
+            className="gap-1 text-[10px] px-1.5 py-0"
             style={{ borderColor: meta.color, color: meta.color }}
           >
-            {meta.icon} {meta.label}
+            <meta.icon className="h-3 w-3" />
+            {meta.label}
           </Badge>
         </div>
       </div>
@@ -438,7 +439,7 @@ function SessionControlsList({
       : (freq.value === 1 ? 'day' : 'days');
     items.push({
       label: 'Sign-in frequency',
-      value: `${freq.value} ${unit}`,
+      value: freq.frequencyInterval === 'everyTime' ? 'Every time' : `${freq.value} ${unit}`,
     });
   }
   if (sessionControls.persistentBrowser?.isEnabled) {
@@ -495,7 +496,10 @@ function formatExtractedSessionControls(
     const unit = freq.type === 'hours'
       ? (freq.value === 1 ? 'hour' : 'hours')
       : (freq.value === 1 ? 'day' : 'days');
-    items.push({ label: 'Sign-in frequency', value: `${freq.value} ${unit}` });
+    items.push({
+      label: 'Sign-in frequency',
+      value: freq.frequencyInterval === 'everyTime' ? 'Every time' : `${freq.value} ${unit}`,
+    });
   }
   if (sc.persistentBrowser) {
     items.push({ label: 'Persistent browser', value: sc.persistentBrowser });

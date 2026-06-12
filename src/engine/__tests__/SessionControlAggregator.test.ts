@@ -29,7 +29,7 @@ describe('SessionControlAggregator', () => {
     it('single policy → preserved as-is', () => {
       const policies = [
         policyWithSession('p1', 'Policy 1', {
-          signInFrequency: { value: 8, type: 'hours' },
+          signInFrequency: { value: 8, type: 'hours', frequencyInterval: 'timeBased' },
         }),
       ];
 
@@ -43,8 +43,8 @@ describe('SessionControlAggregator', () => {
 
     it('4 hours vs 1 day → 4 hours wins (shorter)', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 1, type: 'days' } }),
-        policyWithSession('p2', 'P2', { signInFrequency: { value: 4, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 1, type: 'days', frequencyInterval: 'timeBased' } }),
+        policyWithSession('p2', 'P2', { signInFrequency: { value: 4, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { sessionControls } = aggregator.aggregate(policies);
@@ -56,8 +56,8 @@ describe('SessionControlAggregator', () => {
 
     it('8 hours vs 12 hours → 8 hours wins', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 12, type: 'hours' } }),
-        policyWithSession('p2', 'P2', { signInFrequency: { value: 8, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 12, type: 'hours', frequencyInterval: 'timeBased' } }),
+        policyWithSession('p2', 'P2', { signInFrequency: { value: 8, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { sessionControls } = aggregator.aggregate(policies);
@@ -69,14 +69,38 @@ describe('SessionControlAggregator', () => {
 
     it('1 day (24h) vs 12 hours → 12 hours wins', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 1, type: 'days' } }),
-        policyWithSession('p2', 'P2', { signInFrequency: { value: 12, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 1, type: 'days', frequencyInterval: 'timeBased' } }),
+        policyWithSession('p2', 'P2', { signInFrequency: { value: 12, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { sessionControls } = aggregator.aggregate(policies);
 
       expect(sessionControls.signInFrequency?.value).toBe(12);
       expect(sessionControls.signInFrequency?.type).toBe('hours');
+    });
+
+    it('everyTime beats any time-based frequency and is preserved in the result', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 1, type: 'hours', frequencyInterval: 'timeBased' } }),
+        policyWithSession('p2', 'P2', { signInFrequency: { value: 0, type: 'hours', frequencyInterval: 'everyTime' } }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.signInFrequency?.frequencyInterval).toBe('everyTime');
+      expect(sessionControls.signInFrequency?.source).toBe('p2');
+    });
+
+    it('everyTime is not displaced by a later time-based frequency', () => {
+      const policies = [
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 0, type: 'hours', frequencyInterval: 'everyTime' } }),
+        policyWithSession('p2', 'P2', { signInFrequency: { value: 1, type: 'hours', frequencyInterval: 'timeBased' } }),
+      ];
+
+      const { sessionControls } = aggregator.aggregate(policies);
+
+      expect(sessionControls.signInFrequency?.frequencyInterval).toBe('everyTime');
+      expect(sessionControls.signInFrequency?.source).toBe('p1');
     });
   });
 
@@ -149,7 +173,7 @@ describe('SessionControlAggregator', () => {
   describe('mixed controls', () => {
     it('one policy has frequency, another has persistent browser → both preserved', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours', frequencyInterval: 'timeBased' } }),
         policyWithSession('p2', 'P2', { persistentBrowser: 'never' }),
       ];
 
@@ -213,8 +237,8 @@ describe('SessionControlAggregator', () => {
   describe('source tracking', () => {
     it('winning control records the correct source policy ID', () => {
       const policies = [
-        policyWithSession('freq-long', 'Long Frequency', { signInFrequency: { value: 24, type: 'hours' } }),
-        policyWithSession('freq-short', 'Short Frequency', { signInFrequency: { value: 1, type: 'hours' } }),
+        policyWithSession('freq-long', 'Long Frequency', { signInFrequency: { value: 24, type: 'hours', frequencyInterval: 'timeBased' } }),
+        policyWithSession('freq-short', 'Short Frequency', { signInFrequency: { value: 1, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { sessionControls } = aggregator.aggregate(policies);
@@ -240,7 +264,7 @@ describe('SessionControlAggregator', () => {
 
     it('multiple policies, one with token protection → present in result', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours', frequencyInterval: 'timeBased' } }),
         policyWithSession('p2', 'P2', { secureSignInSession: true }),
       ];
 
@@ -253,7 +277,7 @@ describe('SessionControlAggregator', () => {
 
     it('no policies with token protection → not in result', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 8, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 8, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { sessionControls } = aggregator.aggregate(policies);
@@ -268,7 +292,7 @@ describe('SessionControlAggregator', () => {
   describe('trace quality', () => {
     it('produces trace entries for session aggregation phase', () => {
       const policies = [
-        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours' } }),
+        policyWithSession('p1', 'P1', { signInFrequency: { value: 4, type: 'hours', frequencyInterval: 'timeBased' } }),
       ];
 
       const { trace } = aggregator.aggregate(policies);

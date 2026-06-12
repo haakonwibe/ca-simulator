@@ -83,14 +83,6 @@ const SLOT_ICONS: Record<string, typeof User> = {
   'service-account': Bot,
 };
 
-// ── User type icons ──
-
-const USER_TYPE_LABELS: Record<string, string> = {
-  'Standard Member': 'Standard Member',
-  'Guest User': 'Guest User',
-  'Global Administrator': 'Global Administrator',
-};
-
 // ── Gap type labels ──
 
 const GAP_TYPE_LABELS: Record<string, string> = {
@@ -423,7 +415,7 @@ function GapRow({
         />
         <SeverityIcon className="h-3.5 w-3.5 shrink-0" style={{ color: config.color }} />
         <span className="shrink-0 text-xs" style={{ color: COLORS.text }}>
-          {USER_TYPE_LABELS[group.userType] ?? group.personaName}
+          {group.personaName}
         </span>
         <span style={{ color: COLORS.textDim }}>&rarr;</span>
         <span className="shrink-0 text-xs" style={{ color: COLORS.text }}>
@@ -465,18 +457,22 @@ function GapRow({
 
 // ── Severity swimlane ──
 
+/** Stable group identity — the same fields groupGaps groups by, so it survives
+ * filtering/reordering (a positional index would attach to the wrong row). */
+function gapGroupKey(group: GapGroup): string {
+  return `${group.severity}|${group.gapType}|${group.personaName}|${group.application}|${group.reason}`;
+}
+
 function SeveritySwimlane({
   severity,
   groups,
   expandedKeys,
   onToggle,
-  indexOffset,
 }: {
   severity: GapSeverity;
   groups: GapGroup[];
   expandedKeys: Set<string>;
   onToggle: (key: string) => void;
-  indexOffset: number;
 }) {
   if (groups.length === 0) return null;
   const config = SEVERITY_CONFIG[severity];
@@ -496,8 +492,8 @@ function SeveritySwimlane({
           {config.label} ({groups.length})
         </span>
       </div>
-      {groups.map((group, i) => {
-        const key = `${group.severity}-${group.personaName}-${group.application}-${group.gapType}-${indexOffset + i}`;
+      {groups.map((group) => {
+        const key = gapGroupKey(group);
         return (
           <GapRow
             key={key}
@@ -903,17 +899,9 @@ export function GapsView() {
   const groupsBySeverity: Record<GapSeverity, GapGroup[]> = {
     critical: [], warning: [], caution: [], info: [],
   };
-  const indexOffsets: Record<GapSeverity, number> = { critical: 0, warning: 0, caution: 0, info: 0 };
-  let offset = 0;
   for (const sev of severityOrder) {
-    const sevGroups = displayGroups.filter((g) => g.severity === sev);
-    groupsBySeverity[sev] = sevGroups;
-    indexOffsets[sev] = offset;
-    offset += sevGroups.length;
+    groupsBySeverity[sev] = displayGroups.filter((g) => g.severity === sev);
   }
-
-  const getGroupKey = (group: GapGroup, i: number) =>
-    `${group.severity}-${group.personaName}-${group.application}-${group.gapType}-${i}`;
 
   const toggleGroup = (key: string) => {
     setExpandedGroups((prev) => {
@@ -927,9 +915,7 @@ export function GapsView() {
   const expandAll = () => {
     const allKeys = new Set<string>();
     for (const sev of severityOrder) {
-      groupsBySeverity[sev].forEach((g, i) =>
-        allKeys.add(getGroupKey(g, indexOffsets[sev] + i)),
-      );
+      groupsBySeverity[sev].forEach((g) => allKeys.add(gapGroupKey(g)));
     }
     setExpandedGroups(allKeys);
   };
@@ -1024,7 +1010,6 @@ export function GapsView() {
               groups={groupsBySeverity[sev]}
               expandedKeys={expandedGroups}
               onToggle={toggleGroup}
-              indexOffset={indexOffsets[sev]}
             />
           ))}
         </div>

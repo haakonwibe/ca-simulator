@@ -84,6 +84,24 @@ describe('GrantControlResolver', () => {
       expect(breakdownB?.satisfied).toBe(false);
       expect(breakdownB?.operator).toBe('AND');
       expect(breakdownB?.unsatisfiedControls).toContain('mfa');
+
+      // Policy A is satisfied via compliantDevice — its unmet 'mfa' alternative
+      // must not pollute the cross-policy lists. ('mfa' IS required, but only
+      // because of Policy B.) The never-needed alternative check:
+      expect(result.unsatisfiedControls).not.toContain('compliantDevice');
+      expect(result.satisfiedControls).toContain('compliantDevice');
+    });
+
+    it('unmet alternatives of a satisfied OR policy are not reported as required or unsatisfied', () => {
+      // Single OR policy satisfied via mfa — compliantDevice was never needed
+      const policyA = orPolicy('policy-a', 'Policy A', ['mfa', 'compliantDevice']);
+
+      const result = resolver.resolve([policyA], ['mfa']);
+
+      expect(result.decision).toBe('allow');
+      expect(result.allRequiredControls).toEqual(['mfa']);
+      expect(result.unsatisfiedControls).toEqual([]);
+      expect(result.satisfiedControls).toEqual(['mfa']);
     });
   });
 

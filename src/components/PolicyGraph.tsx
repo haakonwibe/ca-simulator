@@ -361,8 +361,8 @@ function PolicyTile({
 
           {/* Category icon — bottom left */}
           <div className="px-2.5 pb-1.5">
-            <span className="text-xs" title={meta.label}>
-              {meta.icon}
+            <span title={meta.label}>
+              <meta.icon className="h-3.5 w-3.5" style={{ color: meta.color }} />
             </span>
           </div>
         </button>

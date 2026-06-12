@@ -8,7 +8,6 @@ import type { CAEngineResult } from '../engine/models/EvaluationResult';
 
 interface EvaluationState {
   result: CAEngineResult | null;
-  isEvaluating: boolean;
   selectedPolicyId: string | null;
   activeView: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact';
 
@@ -23,14 +22,12 @@ const engine = new CAEngine();
 
 export const useEvaluationStore = create<EvaluationState>((set) => ({
   result: null,
-  isEvaluating: false,
   selectedPolicyId: null,
   activeView: 'grid',
 
+  // Synchronous — the engine is fast enough that no loading state is needed
   evaluate: (policies, context) => {
-    set({ isEvaluating: true });
-    const result = engine.evaluate(policies, context);
-    set({ result, isEvaluating: false });
+    set({ result: engine.evaluate(policies, context) });
   },
 
   setSelectedPolicyId: (id) => {

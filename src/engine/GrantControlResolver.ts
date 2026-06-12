@@ -4,6 +4,7 @@
 import type { PolicyEvaluationResult, TraceEntry } from './models/EvaluationResult';
 import type { SatisfiedControl } from './models/SimulationContext';
 import { isAuthStrengthSatisfied } from './authenticationStrength';
+import { evaluateGrantSatisfaction } from './grantSatisfaction';
 
 export interface PolicyBreakdown {
   policyId: string;
@@ -100,11 +101,19 @@ export class GrantControlResolver {
       const breakdown = this.evaluatePolicy(policy, satisfied, authLevel, customAuthStrengthMap);
       policyBreakdown.push(breakdown);
 
-      for (const c of breakdown.requiredControls) {
-        allRequiredSet.add(c);
-      }
-      for (const c of breakdown.unsatisfiedControls) {
-        allUnsatisfiedSet.add(c);
+      if (breakdown.satisfied) {
+        // A satisfied policy only "requires" the controls that satisfied it —
+        // unmet alternatives of a satisfied OR policy aren't needed by anyone
+        for (const c of breakdown.satisfiedControls) {
+          allRequiredSet.add(c);
+        }
+      } else {
+        for (const c of breakdown.requiredControls) {
+          allRequiredSet.add(c);
+        }
+        for (const c of breakdown.unsatisfiedControls) {
+          allUnsatisfiedSet.add(c);
+        }
       }
 
       trace.push(this.trace(
@@ -177,42 +186,24 @@ export class GrantControlResolver {
 
     const { operator, controls } = policy.grantControls;
 
-    // Build per-control satisfaction lists
-    const controlsSatisfied = controls.filter((c) => satisfiedControls.includes(c));
-    const controlsUnsatisfied = controls.filter((c) => !satisfiedControls.includes(c));
-
     // Handle authenticationStrength via hierarchy resolution
-    let authStrengthSatisfied = true;
     const authStrength = policy.grantControls.authenticationStrength;
-    if (authStrength) {
-      authStrengthSatisfied = isAuthStrengthSatisfied(authenticationStrengthLevel, authStrength.policyStrengthId, customAuthStrengthMap);
-    }
+    const authStrengthSatisfied = authStrength
+      ? isAuthStrengthSatisfied(authenticationStrengthLevel, authStrength.policyStrengthId, customAuthStrengthMap)
+      : undefined;
 
-    // Determine per-policy satisfaction
-    let satisfied: boolean;
-    if (operator === 'AND') {
-      // All controls must be satisfied, plus authenticationStrength if present
-      satisfied = controlsUnsatisfied.length === 0 && authStrengthSatisfied;
-    } else {
-      // At least one control must be satisfied
-      // authenticationStrength counts as a satisfiable control for OR
-      if (controls.length === 0 && authStrength) {
-        satisfied = authStrengthSatisfied;
-      } else if (controls.length === 0 && !authStrength) {
-        satisfied = true;
-      } else {
-        satisfied = controlsSatisfied.length > 0 || (authStrength !== undefined && authStrengthSatisfied);
-      }
-    }
+    // Shared per-policy AND/OR algorithm (same one PolicyEvaluator uses)
+    const satisfaction = evaluateGrantSatisfaction(operator, controls, satisfiedControls, authStrengthSatisfied);
 
-    // Include authenticationStrength in the required/unsatisfied lists
+    // Include authenticationStrength in the required/satisfied/unsatisfied lists
     const requiredControls = [...controls];
-    const unsatisfiedResult = [...controlsUnsatisfied];
-    const authStrengthLabel = authStrength ? `authenticationStrength:${authStrength.displayName ?? authStrength.policyStrengthId}` : undefined;
-    if (authStrengthLabel) {
+    const satisfiedResult = [...satisfaction.satisfiedControls];
+    const unsatisfiedResult = [...satisfaction.unsatisfiedControls];
+    if (authStrength) {
+      const authStrengthLabel = `authenticationStrength:${authStrength.displayName ?? authStrength.policyStrengthId}`;
       requiredControls.push(authStrengthLabel);
       if (authStrengthSatisfied) {
-        controlsSatisfied.push(authStrengthLabel);
+        satisfiedResult.push(authStrengthLabel);
       } else {
         unsatisfiedResult.push(authStrengthLabel);
       }
@@ -221,10 +212,10 @@ export class GrantControlResolver {
     return {
       policyId: policy.policyId,
       policyName: policy.policyName,
-      satisfied,
+      satisfied: satisfaction.satisfied,
       operator,
       requiredControls,
-      satisfiedControls: controlsSatisfied,
+      satisfiedControls: satisfiedResult,
       unsatisfiedControls: unsatisfiedResult,
     };
   }

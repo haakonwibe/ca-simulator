@@ -2,7 +2,6 @@
 
 import { describe, it, expect } from 'vitest';
 import {
-  getAuthStrengthLevel,
   isAuthStrengthSatisfied,
   resolveCustomAuthStrengthTier,
 } from '../authenticationStrength';
@@ -12,21 +11,17 @@ const PASSWORDLESS_ID = '00000000-0000-0000-0000-000000000003';
 const PHISHING_RESISTANT_ID = '00000000-0000-0000-0000-000000000004';
 const CUSTOM_ID = 'aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee';
 
-describe('getAuthStrengthLevel', () => {
-  it('returns 1 for Multifactor authentication', () => {
-    expect(getAuthStrengthLevel(MFA_ID)).toBe(1);
+describe('built-in strength hierarchy levels', () => {
+  it('exact-level users satisfy each built-in strength (1/2/3)', () => {
+    expect(isAuthStrengthSatisfied(1, MFA_ID)).toBe(true);
+    expect(isAuthStrengthSatisfied(2, PASSWORDLESS_ID)).toBe(true);
+    expect(isAuthStrengthSatisfied(3, PHISHING_RESISTANT_ID)).toBe(true);
   });
 
-  it('returns 2 for Passwordless MFA', () => {
-    expect(getAuthStrengthLevel(PASSWORDLESS_ID)).toBe(2);
-  });
-
-  it('returns 3 for Phishing-resistant MFA', () => {
-    expect(getAuthStrengthLevel(PHISHING_RESISTANT_ID)).toBe(3);
-  });
-
-  it('returns -1 for unknown/custom ID', () => {
-    expect(getAuthStrengthLevel(CUSTOM_ID)).toBe(-1);
+  it('one level below each built-in strength does not satisfy it', () => {
+    expect(isAuthStrengthSatisfied(0, MFA_ID)).toBe(false);
+    expect(isAuthStrengthSatisfied(1, PASSWORDLESS_ID)).toBe(false);
+    expect(isAuthStrengthSatisfied(2, PHISHING_RESISTANT_ID)).toBe(false);
   });
 });
 

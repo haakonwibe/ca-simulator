@@ -61,11 +61,8 @@ To evaluate your own tenant's policies:
 2. Add redirect URI: `http://localhost:5173`
 3. Set supported account types to **Accounts in any organizational directory** (multi-tenant)
 4. Grant **delegated** API permissions:
-   - `Policy.Read.All` — read CA policies
-   - `Application.Read.All` — resolve app IDs to display names
-   - `Directory.Read.All` — resolve users, groups, roles
-   - `User.Read.All` — user search for persona selection
-   - `GroupMember.Read.All` — transitive membership resolution
+   - `Policy.Read.All` — read CA policies, named locations, and authentication strengths
+   - `Directory.Read.All` — resolve users, groups, roles, and applications (covers user search, transitive membership, and app discovery)
 5. Copy `.env.example` to `.env` and add your client ID:
    ```bash
    cp .env.example .env
