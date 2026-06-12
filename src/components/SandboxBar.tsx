@@ -9,11 +9,16 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 export function SandboxBar({ onViewDiff }: { onViewDiff: () => void }) {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
   const resetSandbox = usePolicyStore((s) => s.resetSandbox);
 
   if (!sandboxActive) return null;
 
-  const changeCount = Object.keys(sandboxOverrides).length;
+  // Count modified policies (state and/or assignments), not individual edits
+  const changeCount = new Set([
+    ...Object.keys(sandboxOverrides),
+    ...Object.keys(sandboxAssignments),
+  ]).size;
 
   return (
     <div
@@ -30,8 +35,8 @@ export function SandboxBar({ onViewDiff }: { onViewDiff: () => void }) {
       </span>
       <span style={{ color: COLORS.textMuted }}>
         {changeCount === 0
-          ? 'No changes yet — toggle a policy state in the Grid view or detail panel'
-          : `${changeCount} ${changeCount === 1 ? 'change' : 'changes'} vs live`}
+          ? 'No changes yet — toggle a policy state or edit assignments in the detail panel'
+          : `${changeCount} ${changeCount === 1 ? 'policy' : 'policies'} modified vs live`}
       </span>
       <div className="ml-auto flex items-center gap-1">
         <Button
@@ -63,8 +68,10 @@ export function SandboxBar({ onViewDiff }: { onViewDiff: () => void }) {
 export function SandboxChip() {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
 
-  if (!sandboxActive || Object.keys(sandboxOverrides).length === 0) return null;
+  if (!sandboxActive) return null;
+  if (Object.keys(sandboxOverrides).length === 0 && Object.keys(sandboxAssignments).length === 0) return null;
 
   return (
     <span

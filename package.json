@@ -1,6 +1,6 @@
 {
   "name": "conditional-access-simulator",
-  "version": "0.6.0",
+  "version": "0.6.2",
   "description": "A Conditional Access policy simulator for Microsoft Entra ID",
   "author": "Haakon Wibe",
   "license": "MIT",

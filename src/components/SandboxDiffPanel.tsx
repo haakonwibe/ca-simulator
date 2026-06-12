@@ -28,10 +28,12 @@ export function SandboxDiffPanel({
   const livePolicies = usePolicyStore((s) => s.policies);
   const effectivePolicies = usePolicyStore((s) => s.effectivePolicies);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const displayNames = usePolicyStore((s) => s.displayNames);
 
   const changes = useMemo(
-    () => describeSandboxChanges(livePolicies, sandboxOverrides),
-    [livePolicies, sandboxOverrides],
+    () => describeSandboxChanges(livePolicies, sandboxOverrides, sandboxAssignments, displayNames),
+    [livePolicies, sandboxOverrides, sandboxAssignments, displayNames],
   );
 
   // ~2 × 5,760 engine evaluations — only while open with actual changes
@@ -100,15 +102,32 @@ export function SandboxDiffPanel({
                   <div className="mb-1 font-medium leading-tight" style={{ color: COLORS.text }}>
                     {change.policyName}
                   </div>
-                  <div className="flex items-center gap-1.5 text-[11px]">
-                    <span style={{ color: STATE_META[change.from].color }}>
-                      {STATE_META[change.from].label}
-                    </span>
-                    <ArrowRight className="h-3 w-3" style={{ color: COLORS.textDim }} />
-                    <span style={{ color: STATE_META[change.to].color }}>
-                      {STATE_META[change.to].label}
-                    </span>
-                  </div>
+                  {change.stateChange && (
+                    <div className="flex items-center gap-1.5 text-[11px]">
+                      <span style={{ color: STATE_META[change.stateChange.from].color }}>
+                        {STATE_META[change.stateChange.from].label}
+                      </span>
+                      <ArrowRight className="h-3 w-3" style={{ color: COLORS.textDim }} />
+                      <span style={{ color: STATE_META[change.stateChange.to].color }}>
+                        {STATE_META[change.stateChange.to].label}
+                      </span>
+                    </div>
+                  )}
+                  {change.fieldChanges.map((fc) => (
+                    <div key={fc.field} className="mt-0.5 text-[11px]" style={{ color: COLORS.textMuted }}>
+                      <span style={{ color: COLORS.textDim }}>{fc.fieldLabel}:</span>{' '}
+                      {fc.added.map((name) => (
+                        <span key={`+${name}`} className="mr-1.5" style={{ color: COLORS.granted }}>
+                          +{name}
+                        </span>
+                      ))}
+                      {fc.removed.map((name) => (
+                        <span key={`-${name}`} className="mr-1.5 line-through" style={{ color: COLORS.blocked }}>
+                          {name}
+                        </span>
+                      ))}
+                    </div>
+                  ))}
                 </div>
               ))}
             </div>

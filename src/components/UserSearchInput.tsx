@@ -14,9 +14,11 @@ interface UserSearchInputProps {
   onSelect: (user: UserSearchResult) => void;
   placeholder?: string;
   disabled?: boolean;
+  /** Override the input sizing classes (e.g. compact contexts like the assignment editor) */
+  inputClassName?: string;
 }
 
-export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchInputProps) {
+export function UserSearchInput({ onSelect, placeholder, disabled, inputClassName }: UserSearchInputProps) {
   const {
     isSampleMode,
     searchQuery,
@@ -55,7 +57,7 @@ export function UserSearchInput({ onSelect, placeholder, disabled }: UserSearchI
           value={searchQuery}
           onChange={(e) => handleChange(e.target.value)}
           onFocus={() => { if (!disabled) handleFocus(); }}
-          className="h-8 pl-8 pr-8 text-xs"
+          className={inputClassName ?? 'h-8 pl-8 pr-8 text-xs'}
           disabled={disabled}
         />
         {isSearching && (

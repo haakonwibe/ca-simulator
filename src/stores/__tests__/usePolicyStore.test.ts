@@ -158,6 +158,97 @@ describe('sandbox overrides', () => {
   });
 });
 
+describe('assignment overrides', () => {
+  it('setAssignmentOverride records a deviation and updates effectivePolicies', () => {
+    const p1 = createPolicy({ id: 'p1' });
+    seedLive([p1]);
+    usePolicyStore.getState().setSandboxActive(true);
+
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', ['u1']);
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxAssignments).toEqual({ p1: { excludeUsers: ['u1'] } });
+    expect(s.effectivePolicies[0].conditions.users.excludeUsers).toEqual(['u1']);
+    expect(s.policies[0].conditions.users.excludeUsers).toEqual([]); // live untouched
+  });
+
+  it('setting a field back to its live value removes the override', () => {
+    const p1 = createPolicy({ id: 'p1' });
+    seedLive([p1]);
+    usePolicyStore.getState().setSandboxActive(true);
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', ['u1']);
+
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', []);
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxAssignments).toEqual({});
+    expect(s.effectivePolicies).toBe(s.policies);
+  });
+
+  it('normalization is order-insensitive', () => {
+    const p1 = createPolicy({
+      id: 'p1',
+      conditions: {
+        ...createBaseConditions(),
+        users: {
+          includeUsers: ['All'],
+          excludeUsers: ['u1', 'u2'],
+          includeGroups: [],
+          excludeGroups: [],
+          includeRoles: [],
+          excludeRoles: [],
+        },
+      },
+    });
+    seedLive([p1]);
+    usePolicyStore.getState().setSandboxActive(true);
+
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', ['u2', 'u1']);
+
+    expect(usePolicyStore.getState().sandboxAssignments).toEqual({});
+  });
+
+  it('revertPolicySandbox clears both maps for one policy only', () => {
+    const p1 = createPolicy({ id: 'p1' });
+    const p2 = createPolicy({ id: 'p2' });
+    seedLive([p1, p2]);
+    usePolicyStore.getState().setSandboxActive(true);
+    usePolicyStore.getState().setSandboxOverride('p1', 'disabled');
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', ['u1']);
+    usePolicyStore.getState().setSandboxOverride('p2', 'disabled');
+
+    usePolicyStore.getState().revertPolicySandbox('p1');
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxOverrides).toEqual({ p2: 'disabled' });
+    expect(s.sandboxAssignments).toEqual({});
+    expect(s.effectivePolicies[0]).toBe(p1);
+    expect(s.effectivePolicies[1].state).toBe('disabled');
+  });
+
+  it('resetSandbox clears assignment overrides too', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    usePolicyStore.getState().setSandboxActive(true);
+    usePolicyStore.getState().setAssignmentOverride('p1', 'excludeUsers', ['u1']);
+
+    usePolicyStore.getState().resetSandbox();
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxAssignments).toEqual({});
+    expect(s.effectivePolicies).toBe(s.policies);
+  });
+
+  it('mergeDisplayNames adds entries without dropping existing ones', () => {
+    usePolicyStore.setState({ displayNames: new Map([['a', 'Alpha']]) });
+
+    usePolicyStore.getState().mergeDisplayNames({ b: 'Beta' });
+
+    const names = usePolicyStore.getState().displayNames;
+    expect(names.get('a')).toBe('Alpha');
+    expect(names.get('b')).toBe('Beta');
+  });
+});
+
 describe('sandbox across data loads', () => {
   it('switching to sample data starts with a clean sandbox', () => {
     seedLive([createPolicy({ id: 'p1' })]);

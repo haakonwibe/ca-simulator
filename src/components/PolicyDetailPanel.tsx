@@ -3,11 +3,13 @@
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS, CATEGORY_META } from '@/data/theme';
-import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
+import { resolveAssignmentEntryName } from '@/lib/sandboxDiff';
+import type { ConditionalAccessPolicy, GuestOrExternalUserCondition } from '@/engine/models/Policy';
 import type { PolicyEvaluationResult, ConditionMatchResult, ExtractedSessionControls } from '@/engine/models/EvaluationResult';
-import { X, CheckCircle2, XCircle, Minus, AlertTriangle } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Minus, AlertTriangle, Undo2 } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
 import { SandboxStateControl } from '@/components/SandboxStateControl';
+import { SandboxAssignmentEditor } from '@/components/SandboxAssignmentEditor';
 import { Separator } from '@/components/ui/separator';
 import {
   inferCategory,
@@ -25,6 +27,7 @@ export function PolicyDetailPanel() {
   const result = useEvaluationStore((s) => s.result);
   const policies = usePolicyStore((s) => s.effectivePolicies);
   const displayNames = usePolicyStore((s) => s.displayNames);
+  const sandboxActive = usePolicyStore((s) => s.sandboxActive);
 
   const policy = policies.find((p) => p.id === selectedPolicyId);
   const evalResult = result && selectedPolicyId
@@ -60,6 +63,12 @@ export function PolicyDetailPanel() {
             onClose={() => setSelectedPolicyId(null)}
           />
           <Separator />
+          {sandboxActive && (
+            <>
+              <SandboxAssignmentEditor policyId={policy.id} />
+              <Separator />
+            </>
+          )}
           {evalResult ? (
             <PostEvalDetail
               policy={policy}
@@ -86,8 +95,10 @@ function PanelHeader({
 }) {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
   const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
-  const isModified = policy.id in sandboxOverrides;
+  const revertPolicySandbox = usePolicyStore((s) => s.revertPolicySandbox);
+  const isModified = policy.id in sandboxOverrides || policy.id in sandboxAssignments;
 
   const category = inferCategory(policy);
   const meta = CATEGORY_META[category] ?? CATEGORY_META.identity;
@@ -122,13 +133,24 @@ function PanelHeader({
                 onChange={(state) => setSandboxOverride(policy.id, state)}
               />
               {isModified && (
-                <Badge
-                  variant="outline"
-                  className="text-[10px] px-1.5 py-0"
-                  style={{ borderColor: COLORS.accentLight, color: COLORS.accentLight }}
-                >
-                  Modified
-                </Badge>
+                <>
+                  <Badge
+                    variant="outline"
+                    className="text-[10px] px-1.5 py-0"
+                    style={{ borderColor: COLORS.warning, color: COLORS.warning }}
+                  >
+                    Modified
+                  </Badge>
+                  <button
+                    onClick={() => revertPolicySandbox(policy.id)}
+                    className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] hover:bg-accent/50"
+                    style={{ color: COLORS.textMuted }}
+                    title="Discard all sandbox changes to this policy"
+                  >
+                    <Undo2 className="h-2.5 w-2.5" />
+                    Revert
+                  </button>
+                </>
               )}
             </>
           ) : (
@@ -317,21 +339,33 @@ function PreEvalDetail({
       <SectionHeading>Conditions</SectionHeading>
       <div className="space-y-1.5">
         {MATRIX_COLUMNS.map((col) => {
-          const summary = getCellSummary(policy, col.key, displayNames);
+          // Users/Apps get expanded include/exclude lines with resolved names \u2014
+          // the terse Matrix-cell format is too cryptic at panel width
+          const lines =
+            col.key === 'users'
+              ? describeUserLines(policy, displayNames)
+              : col.key === 'apps'
+                ? describeAppLines(policy, displayNames)
+                : null;
+          const summary = lines ? null : getCellSummary(policy, col.key, displayNames);
           const isDim = summary === '\u00b7';
           return (
             <div
               key={col.key}
-              className="flex items-center gap-2 text-xs"
+              className="flex items-start gap-2 text-xs"
             >
               <span
                 style={{ color: COLORS.textMuted, width: '80px', flexShrink: 0 }}
               >
                 {col.header}
               </span>
-              <span style={{ color: isDim ? COLORS.textDim : COLORS.text }}>
-                {summary}
-              </span>
+              {lines ? (
+                <AssignmentLinesView lines={lines} />
+              ) : (
+                <span style={{ color: isDim ? COLORS.textDim : COLORS.text }}>
+                  {summary}
+                </span>
+              )}
             </div>
           );
         })}
@@ -365,6 +399,116 @@ function PreEvalDetail({
             <SessionControlsList sessionControls={policy.sessionControls} />
           </div>
         </>
+      )}
+    </div>
+  );
+}
+
+// ── Expanded Users/Apps assignment lines (pre-eval panel rows) ──────
+
+interface AssignmentLines {
+  include: string[];
+  exclude: string[];
+}
+
+const GUEST_TYPE_LABELS: Record<string, string> = {
+  b2bCollaborationGuest: 'B2B guests',
+  b2bCollaborationMember: 'B2B members',
+  b2bDirectConnectUser: 'B2B direct connect',
+  internalGuest: 'Internal guests',
+  serviceProvider: 'Service providers',
+  otherExternalUser: 'Other external users',
+};
+
+function formatGuestCondition(g: GuestOrExternalUserCondition): string {
+  const types = g.guestOrExternalUserTypes
+    .split(',')
+    .map((t) => GUEST_TYPE_LABELS[t.trim()] ?? t.trim());
+  return `Guests (${types.join(', ')})`;
+}
+
+const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+function resolveName(id: string, displayNames: Map<string, string>): string {
+  const name = resolveAssignmentEntryName(id, displayNames);
+  // Unresolvable GUID — truncate rather than flooding the line
+  return GUID_RE.test(id) && name === id ? `${id.slice(0, 8)}…` : name;
+}
+
+function describeUserLines(
+  policy: ConditionalAccessPolicy,
+  displayNames: Map<string, string>,
+): AssignmentLines {
+  const u = policy.conditions.users;
+  const resolve = (id: string) => resolveName(id, displayNames);
+
+  const include: string[] = [
+    ...(u.includeUsers.includes('All') ? ['All users'] : []),
+    ...u.includeRoles.map(resolve),
+    ...u.includeGroups.map(resolve),
+    ...u.includeUsers.filter((v) => v !== 'All').map(resolve),
+  ];
+  if (u.includeGuestsOrExternalUsers) {
+    include.push(formatGuestCondition(u.includeGuestsOrExternalUsers));
+  }
+
+  const exclude: string[] = [
+    ...u.excludeRoles.map(resolve),
+    ...u.excludeGroups.map(resolve),
+    ...u.excludeUsers.map(resolve),
+  ];
+  if (u.excludeGuestsOrExternalUsers) {
+    exclude.push(formatGuestCondition(u.excludeGuestsOrExternalUsers));
+  }
+
+  return { include, exclude };
+}
+
+function describeAppLines(
+  policy: ConditionalAccessPolicy,
+  displayNames: Map<string, string>,
+): AssignmentLines | null {
+  const a = policy.conditions.applications;
+  // User actions / auth contexts keep the existing compact summary
+  if (a.includeUserActions?.length || a.includeAuthenticationContextClassReferences?.length) {
+    return null;
+  }
+  const resolve = (id: string) =>
+    id === 'All' ? 'All cloud apps' : resolveName(id, displayNames);
+  return {
+    include: a.includeApplications.map(resolve),
+    exclude: a.excludeApplications.map(resolve),
+  };
+}
+
+const LINE_NAME_CAP = 4;
+
+function capList(items: string[]): string {
+  if (items.length <= LINE_NAME_CAP) return items.join(', ');
+  return `${items.slice(0, LINE_NAME_CAP).join(', ')} +${items.length - LINE_NAME_CAP} more`;
+}
+
+function AssignmentLinesView({ lines }: { lines: AssignmentLines }) {
+  if (lines.include.length === 0 && lines.exclude.length === 0) {
+    return <span style={{ color: COLORS.textDim }}>None</span>;
+  }
+  return (
+    <div className="min-w-0 flex-1 space-y-0.5">
+      {lines.include.length > 0 && (
+        <div className="flex gap-1.5">
+          <span className="shrink-0 text-[10px] uppercase tracking-wide" style={{ color: COLORS.textDim, width: '46px' }}>
+            Include
+          </span>
+          <span style={{ color: COLORS.text }}>{capList(lines.include)}</span>
+        </div>
+      )}
+      {lines.exclude.length > 0 && (
+        <div className="flex gap-1.5">
+          <span className="shrink-0 text-[10px] uppercase tracking-wide" style={{ color: COLORS.textDim, width: '46px' }}>
+            Exclude
+          </span>
+          <span style={{ color: COLORS.text }}>{capList(lines.exclude)}</span>
+        </div>
       )}
     </div>
   );

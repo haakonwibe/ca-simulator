@@ -6,7 +6,16 @@ import { loadPoliciesFromGraph, fetchTenantName, type NamedLocationInfo } from '
 import { getAccessToken } from '../services/auth';
 import { SAMPLE_POLICIES, SAMPLE_DISPLAY_NAMES } from '../data/samplePolicies';
 import type { TenantApplication } from '../types/TenantApplication';
-import { applySandboxOverrides, pruneSandboxOverrides, type SandboxOverrides } from '../lib/sandbox';
+import {
+  applySandboxEdits,
+  pruneSandboxOverrides,
+  pruneSandboxAssignments,
+  sameMembers,
+  getAssignmentField,
+  type SandboxOverrides,
+  type SandboxAssignments,
+  type AssignmentField,
+} from '../lib/sandbox';
 
 interface PolicyStoreState {
   policies: ConditionalAccessPolicy[];
@@ -19,11 +28,12 @@ interface PolicyStoreState {
   error: string | null;
   dataSource: 'none' | 'live' | 'sample';
 
-  // Sandbox: hypothetical policy-state overrides, applied on top of live policies.
-  // effectivePolicies is what every consumer reads — identical reference to
-  // policies when the sandbox is off or has no changes.
+  // Sandbox: hypothetical policy overrides (state + assignments), applied on
+  // top of live policies. effectivePolicies is what every consumer reads —
+  // identical reference to policies when the sandbox is off or has no changes.
   sandboxActive: boolean;
   sandboxOverrides: SandboxOverrides;
+  sandboxAssignments: SandboxAssignments;
   effectivePolicies: ConditionalAccessPolicy[];
 
   // Actions
@@ -33,16 +43,22 @@ interface PolicyStoreState {
   clear: () => void;
   setSandboxActive: (active: boolean) => void;
   setSandboxOverride: (policyId: string, state: PolicyState) => void;
+  setAssignmentOverride: (policyId: string, field: AssignmentField, values: string[]) => void;
+  revertPolicySandbox: (policyId: string) => void;
   resetSandbox: () => void;
+  /** Merge resolved display names (e.g. from user search picks) for GUID rendering. */
+  mergeDisplayNames: (entries: Record<string, string>) => void;
 }
 
 function computeEffectivePolicies(
   policies: ConditionalAccessPolicy[],
   sandboxActive: boolean,
   overrides: SandboxOverrides,
+  assignments: SandboxAssignments,
 ): ConditionalAccessPolicy[] {
-  if (!sandboxActive || Object.keys(overrides).length === 0) return policies;
-  return applySandboxOverrides(policies, overrides);
+  if (!sandboxActive) return policies;
+  if (Object.keys(overrides).length === 0 && Object.keys(assignments).length === 0) return policies;
+  return applySandboxEdits(policies, overrides, assignments);
 }
 
 export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
@@ -57,6 +73,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   dataSource: 'none',
   sandboxActive: false,
   sandboxOverrides: {},
+  sandboxAssignments: {},
   effectivePolicies: [],
 
   loadTenantName: async () => {
@@ -80,6 +97,9 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       const sandboxOverrides = isRefresh
         ? pruneSandboxOverrides(policies, get().sandboxOverrides)
         : {};
+      const sandboxAssignments = isRefresh
+        ? pruneSandboxAssignments(policies, get().sandboxAssignments)
+        : {};
       set({
         policies,
         namedLocations,
@@ -91,7 +111,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         dataSource: 'live',
         sandboxActive,
         sandboxOverrides,
-        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides),
+        sandboxAssignments,
+        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments),
       });
     } catch (error) {
       set({
@@ -118,6 +139,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     const isRefresh = get().dataSource === 'sample';
     const sandboxActive = isRefresh ? get().sandboxActive : false;
     const sandboxOverrides = isRefresh ? get().sandboxOverrides : {};
+    const sandboxAssignments = isRefresh ? get().sandboxAssignments : {};
     set({
       policies: SAMPLE_POLICIES,
       namedLocations: new Map(),
@@ -130,7 +152,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       dataSource: 'sample',
       sandboxActive,
       sandboxOverrides,
-      effectivePolicies: computeEffectivePolicies(SAMPLE_POLICIES, sandboxActive, sandboxOverrides),
+      sandboxAssignments,
+      effectivePolicies: computeEffectivePolicies(SAMPLE_POLICIES, sandboxActive, sandboxOverrides, sandboxAssignments),
     });
   },
 
@@ -146,20 +169,21 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       dataSource: 'none',
       sandboxActive: false,
       sandboxOverrides: {},
+      sandboxAssignments: {},
       effectivePolicies: [],
     });
   },
 
   setSandboxActive: (active) => {
-    const { policies, sandboxOverrides } = get();
+    const { policies, sandboxOverrides, sandboxAssignments } = get();
     set({
       sandboxActive: active,
-      effectivePolicies: computeEffectivePolicies(policies, active, sandboxOverrides),
+      effectivePolicies: computeEffectivePolicies(policies, active, sandboxOverrides, sandboxAssignments),
     });
   },
 
   setSandboxOverride: (policyId, state) => {
-    const { policies, sandboxActive, sandboxOverrides } = get();
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
     const livePolicy = policies.find((p) => p.id === policyId);
     if (!livePolicy) return;
 
@@ -171,11 +195,57 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     }
     set({
       sandboxOverrides: overrides,
-      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides),
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, sandboxAssignments),
+    });
+  },
+
+  setAssignmentOverride: (policyId, field, values) => {
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
+    const livePolicy = policies.find((p) => p.id === policyId);
+    if (!livePolicy) return;
+
+    const assignments = { ...sandboxAssignments };
+    const override = { ...(assignments[policyId] ?? {}) };
+
+    if (sameMembers(values, getAssignmentField(livePolicy, field))) {
+      delete override[field]; // back to live value — not a change
+    } else {
+      override[field] = values;
+    }
+
+    if (Object.keys(override).length === 0) {
+      delete assignments[policyId];
+    } else {
+      assignments[policyId] = override;
+    }
+    set({
+      sandboxAssignments: assignments,
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, assignments),
+    });
+  },
+
+  revertPolicySandbox: (policyId) => {
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
+    const overrides = { ...sandboxOverrides };
+    const assignments = { ...sandboxAssignments };
+    delete overrides[policyId];
+    delete assignments[policyId];
+    set({
+      sandboxOverrides: overrides,
+      sandboxAssignments: assignments,
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, assignments),
     });
   },
 
   resetSandbox: () => {
-    set({ sandboxOverrides: {}, effectivePolicies: get().policies });
+    set({ sandboxOverrides: {}, sandboxAssignments: {}, effectivePolicies: get().policies });
+  },
+
+  mergeDisplayNames: (entries) => {
+    const merged = new Map(get().displayNames);
+    for (const [id, name] of Object.entries(entries)) {
+      merged.set(id, name);
+    }
+    set({ displayNames: merged });
   },
 }));

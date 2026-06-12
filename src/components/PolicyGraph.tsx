@@ -13,6 +13,7 @@ import {
   XCircle,
   Eye,
   Zap,
+  Beaker,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -141,6 +142,7 @@ export function PolicyGraph() {
   const isLoading = usePolicyStore((s) => s.isLoading);
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
   const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
   const result = useEvaluationStore((s) => s.result);
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
@@ -228,7 +230,7 @@ export function PolicyGraph() {
                   index={index}
                   hasEvaluation={!!result}
                   sandboxActive={sandboxActive}
-                  isModified={policy.id in sandboxOverrides}
+                  isModified={policy.id in sandboxOverrides || policy.id in sandboxAssignments}
                   onStateChange={(state) => setSandboxOverride(policy.id, state)}
                 />
               );
@@ -308,11 +310,13 @@ function PolicyTile({
     : policy.state === 'enabledForReportingButNotEnforced' ? 'Report-Only' : 'Disabled';
   const evalVerdict = getEvalVerdict(tileState, evalResult);
 
-  // Sandbox-modified tiles get an accent ring (selection ring takes precedence)
+  // Sandbox-modified tiles get the sandbox amber ring — same color family as
+  // the sandbox bar/chip so "amber = sandbox change" reads consistently.
+  // Selection ring takes precedence.
   const ringShadow = isSelected
     ? `0 0 0 1px ${COLORS.borderActive}`
     : isModified
-      ? `0 0 0 1px ${COLORS.accentLight}`
+      ? `0 0 0 1.5px ${COLORS.warning}, 0 0 8px rgba(217, 119, 6, 0.35)`
       : style.glow;
 
   return (
@@ -388,6 +392,17 @@ function PolicyTile({
                 <meta.icon className="h-3.5 w-3.5" style={{ color: meta.color }} />
               </span>
             </div>
+
+            {/* Sandbox-modified badge — bottom right, unmistakable glyph */}
+            {isModified && (
+              <div
+                className="absolute bottom-1 right-1 rounded p-0.5"
+                style={{ backgroundColor: 'rgba(217, 119, 6, 0.18)' }}
+                title="Modified in sandbox"
+              >
+                <Beaker className="h-3 w-3" style={{ color: COLORS.warning }} />
+              </div>
+            )}
           </button>
         </TooltipTrigger>
         <TooltipContent side="bottom" className="max-w-[250px]">
@@ -396,7 +411,7 @@ function PolicyTile({
             {stateLabel} &middot; {meta.label}
           </p>
           {isModified && (
-            <p className="text-[10px] mt-0.5" style={{ color: COLORS.accentLight }}>
+            <p className="text-[10px] mt-0.5" style={{ color: COLORS.warning }}>
               Modified in sandbox
             </p>
           )}

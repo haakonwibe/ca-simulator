@@ -14,7 +14,15 @@ import {
   type AffectedUserBreakdown,
   type AffectedUserEntry,
 } from './impactAnalysis';
-import type { SandboxOverrides } from './sandbox';
+import {
+  sameMembers,
+  getAssignmentField,
+  ASSIGNMENT_FIELD_LABELS,
+  type SandboxOverrides,
+  type SandboxAssignments,
+  type AssignmentField,
+} from './sandbox';
+import { getBundleDisplayName } from '@/data/appBundles';
 import {
   SWEEP_USER_TYPES,
   SWEEP_APPS,
@@ -29,11 +37,20 @@ import {
 
 // ── Types ───────────────────────────────────────────────────────────
 
+export interface SandboxFieldChange {
+  field: AssignmentField;
+  fieldLabel: string;
+  /** Display names of entries added vs live */
+  added: string[];
+  /** Display names of entries removed vs live */
+  removed: string[];
+}
+
 export interface SandboxChange {
   policyId: string;
   policyName: string;
-  from: PolicyState;
-  to: PolicyState;
+  stateChange?: { from: PolicyState; to: PolicyState };
+  fieldChanges: SandboxFieldChange[];
 }
 
 export interface SandboxSweepDiff {
@@ -57,20 +74,60 @@ export interface SandboxSweepDiff {
 
 // ── Change list ─────────────────────────────────────────────────────
 
+const SPECIAL_VALUE_LABELS: Record<string, string> = {
+  All: 'All',
+  None: 'None',
+  GuestsOrExternalUsers: 'Guests or external users',
+};
+
+/** Resolve an assignment entry (GUID, bundle name, or special value) to a display name. */
+export function resolveAssignmentEntryName(
+  id: string,
+  displayNames?: ReadonlyMap<string, string>,
+): string {
+  return displayNames?.get(id) ?? getBundleDisplayName(id) ?? SPECIAL_VALUE_LABELS[id] ?? id;
+}
+
 /** Human-oriented list of sandbox deviations, in live policy order. */
 export function describeSandboxChanges(
   livePolicies: ConditionalAccessPolicy[],
   overrides: SandboxOverrides,
+  assignments: SandboxAssignments = {},
+  displayNames?: ReadonlyMap<string, string>,
 ): SandboxChange[] {
+  const resolve = (id: string): string => resolveAssignmentEntryName(id, displayNames);
+
   const changes: SandboxChange[] = [];
   for (const policy of livePolicies) {
     const to = overrides[policy.id];
-    if (to !== undefined && to !== policy.state) {
+    const stateChange =
+      to !== undefined && to !== policy.state ? { from: policy.state, to } : undefined;
+
+    const fieldChanges: SandboxFieldChange[] = [];
+    const override = assignments[policy.id];
+    if (override) {
+      for (const field of Object.keys(override) as AssignmentField[]) {
+        const values = override[field];
+        if (values === undefined) continue;
+        const live = getAssignmentField(policy, field);
+        if (sameMembers(values, live)) continue;
+        const liveSet = new Set(live);
+        const valueSet = new Set(values);
+        fieldChanges.push({
+          field,
+          fieldLabel: ASSIGNMENT_FIELD_LABELS[field],
+          added: values.filter((v) => !liveSet.has(v)).map(resolve),
+          removed: live.filter((v) => !valueSet.has(v)).map(resolve),
+        });
+      }
+    }
+
+    if (stateChange || fieldChanges.length > 0) {
       changes.push({
         policyId: policy.id,
         policyName: policy.displayName,
-        from: policy.state,
-        to,
+        stateChange,
+        fieldChanges,
       });
     }
   }

@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.2',
+    subtitle: 'Sandbox Assignment Editing',
+    features: [
+      {
+        heading: 'Edit Policy Scoping in the Sandbox',
+        body: 'Sandbox mode now goes beyond state toggles: open any policy and edit who and what it applies to. Remove any included or excluded user, group, role, or application with one click, and add users (via search or the All / None / Guests values) and applications (from bundles and your tenant apps). Every view — results, Gaps, Impact, Baseline — reflects the edited scoping instantly.',
+      },
+      {
+        heading: 'Clear Change Tracking',
+        body: 'Removed entries stay visible as struck-through ghost chips with one-click restore, added entries are highlighted, and the diff panel itemizes every scoping change by field with display names. A Revert button discards all sandbox changes for a single policy.',
+      },
+      {
+        heading: 'Stronger Sandbox Signals',
+        body: 'Modified policies are now unmistakable in the Grid view — an amber ring and a beaker badge mark every tile that differs from live state, using the same color as the sandbox bar throughout the app.',
+      },
+      {
+        heading: 'Readable Policy Summaries',
+        body: 'The policy detail panel now lists who and what a policy targets by name — included and excluded users, groups, roles, guest types, and applications — instead of compact counts.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.0',
     subtitle: 'Baseline Assessment',
     features: [

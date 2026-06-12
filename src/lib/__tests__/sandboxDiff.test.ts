@@ -67,7 +67,7 @@ const blockLegacyAuth = (state: ConditionalAccessPolicy['state'] = 'enabled') =>
 // ── describeSandboxChanges ──
 
 describe('describeSandboxChanges', () => {
-  it('lists deviations in live policy order', () => {
+  it('lists state deviations in live policy order', () => {
     const policies = [mfaForAll('enabled'), blockLegacyAuth('enabled')];
     const changes = describeSandboxChanges(policies, {
       'block-legacy': 'disabled',
@@ -78,14 +78,14 @@ describe('describeSandboxChanges', () => {
       {
         policyId: 'mfa-all',
         policyName: 'Require MFA for All',
-        from: 'enabled',
-        to: 'enabledForReportingButNotEnforced',
+        stateChange: { from: 'enabled', to: 'enabledForReportingButNotEnforced' },
+        fieldChanges: [],
       },
       {
         policyId: 'block-legacy',
         policyName: 'Block Legacy Auth',
-        from: 'enabled',
-        to: 'disabled',
+        stateChange: { from: 'enabled', to: 'disabled' },
+        fieldChanges: [],
       },
     ]);
   });
@@ -96,6 +96,71 @@ describe('describeSandboxChanges', () => {
       'mfa-all': 'enabled',
       ghost: 'disabled',
     });
+
+    expect(changes).toEqual([]);
+  });
+
+  it('describes assignment field changes with added and removed display names', () => {
+    const userId = 'aaaaaaaa-1111-2222-3333-444444444444';
+    const policy = createPolicy({
+      id: 'p1',
+      displayName: 'Scoped Policy',
+      conditions: createBaseConditions({
+        users: {
+          includeUsers: ['All'],
+          excludeUsers: [userId],
+          includeGroups: [],
+          excludeGroups: [],
+          includeRoles: [],
+          excludeRoles: [],
+        },
+      }),
+    });
+    const displayNames = new Map([[userId, 'Sam Chen']]);
+    const changes = describeSandboxChanges(
+      [policy],
+      {},
+      { p1: { excludeUsers: [], includeApplications: ['All', 'Office365'] } },
+      displayNames,
+    );
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0].stateChange).toBeUndefined();
+    expect(changes[0].fieldChanges).toEqual(
+      expect.arrayContaining([
+        {
+          field: 'excludeUsers',
+          fieldLabel: 'Excluded users',
+          added: [],
+          removed: ['Sam Chen'],
+        },
+        {
+          field: 'includeApplications',
+          fieldLabel: 'Included applications',
+          added: ['Office 365'],
+          removed: [],
+        },
+      ]),
+    );
+  });
+
+  it('combines state and assignment changes for the same policy', () => {
+    const policy = mfaForAll('enabled');
+    const changes = describeSandboxChanges(
+      [policy],
+      { 'mfa-all': 'disabled' },
+      { 'mfa-all': { excludeGroups: ['g1'] } },
+    );
+
+    expect(changes).toHaveLength(1);
+    expect(changes[0].stateChange).toEqual({ from: 'enabled', to: 'disabled' });
+    expect(changes[0].fieldChanges).toHaveLength(1);
+    expect(changes[0].fieldChanges[0].added).toEqual(['g1']); // no display name → raw id
+  });
+
+  it('skips field overrides equal to the live value', () => {
+    const policy = mfaForAll('enabled');
+    const changes = describeSandboxChanges([policy], {}, { 'mfa-all': { includeUsers: ['All'] } });
 
     expect(changes).toEqual([]);
   });

@@ -70,15 +70,18 @@ export function ResultsSummary() {
   const livePolicies = usePolicyStore((s) => s.policies);
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
 
   // With sandbox changes active, the displayed result reflects the sandbox set;
   // also evaluate the live set so the banner can show what the tenant does today.
   const liveResult = useMemo(() => {
-    if (!sandboxActive || Object.keys(sandboxOverrides).length === 0 || !lastContext) {
+    const hasChanges =
+      Object.keys(sandboxOverrides).length > 0 || Object.keys(sandboxAssignments).length > 0;
+    if (!sandboxActive || !hasChanges || !lastContext) {
       return null;
     }
     return new CAEngine().evaluate(livePolicies, lastContext);
-  }, [sandboxActive, sandboxOverrides, livePolicies, lastContext]);
+  }, [sandboxActive, sandboxOverrides, sandboxAssignments, livePolicies, lastContext]);
 
   // Lifted expansion state
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
