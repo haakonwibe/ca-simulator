@@ -42,9 +42,11 @@ function withValueAdded(current: string[], value: string): string[] {
 export function SandboxAssignmentEditor({ policyId }: { policyId: string }) {
   const livePolicies = usePolicyStore((s) => s.policies);
   const effectivePolicies = usePolicyStore((s) => s.effectivePolicies);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
 
-  const live = livePolicies.find((p) => p.id === policyId);
   const effective = effectivePolicies.find((p) => p.id === policyId);
+  // Drafts have no live counterpart — the draft itself is the baseline
+  const live = livePolicies.find((p) => p.id === policyId) ?? sandboxDrafts[policyId];
   if (!live || !effective) return null;
 
   return (
@@ -84,6 +86,7 @@ function FieldRow({
 
   const isUserAddField = field === 'includeUsers' || field === 'excludeUsers';
   const isAppField = field === 'includeApplications' || field === 'excludeApplications';
+  const entryKind = isAppField ? 'app' : 'user';
   const canAdd = isUserAddField || isAppField;
 
   // Hide rows with nothing to show or do (e.g. empty group/role lists)
@@ -112,7 +115,7 @@ function FieldRow({
           <EntryChip
             key={value}
             value={value}
-            name={resolveAssignmentEntryName(value, displayNames)}
+            name={resolveAssignmentEntryName(value, displayNames, entryKind)}
             isAdded={!liveSet.has(value)}
             onRemove={() => setValues(effectiveValues.filter((v) => v !== value))}
           />
@@ -120,7 +123,7 @@ function FieldRow({
         {removed.map((value) => (
           <GhostChip
             key={value}
-            name={resolveAssignmentEntryName(value, displayNames)}
+            name={resolveAssignmentEntryName(value, displayNames, entryKind)}
             onUndo={() => setValues(withValueAdded(effectiveValues, value))}
           />
         ))}

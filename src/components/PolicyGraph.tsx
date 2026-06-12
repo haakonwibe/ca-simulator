@@ -143,6 +143,7 @@ export function PolicyGraph() {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
   const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
   const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
   const result = useEvaluationStore((s) => s.result);
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
@@ -231,6 +232,7 @@ export function PolicyGraph() {
                   hasEvaluation={!!result}
                   sandboxActive={sandboxActive}
                   isModified={policy.id in sandboxOverrides || policy.id in sandboxAssignments}
+                  isDraft={policy.id in sandboxDrafts}
                   onStateChange={(state) => setSandboxOverride(policy.id, state)}
                 />
               );
@@ -258,6 +260,7 @@ function PolicyTile({
   hasEvaluation,
   sandboxActive,
   isModified,
+  isDraft,
   onStateChange,
 }: {
   policy: ConditionalAccessPolicy;
@@ -270,6 +273,7 @@ function PolicyTile({
   hasEvaluation: boolean;
   sandboxActive: boolean;
   isModified: boolean;
+  isDraft: boolean;
   onStateChange: (state: ConditionalAccessPolicy['state']) => void;
 }) {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.identity;
@@ -312,10 +316,10 @@ function PolicyTile({
 
   // Sandbox-modified tiles get the sandbox amber ring — same color family as
   // the sandbox bar/chip so "amber = sandbox change" reads consistently.
-  // Selection ring takes precedence.
+  // Selection ring takes precedence. Drafts use a dashed amber border instead.
   const ringShadow = isSelected
     ? `0 0 0 1px ${COLORS.borderActive}`
-    : isModified
+    : isModified || isDraft
       ? `0 0 0 1.5px ${COLORS.warning}, 0 0 8px rgba(217, 119, 6, 0.35)`
       : style.glow;
 
@@ -331,6 +335,7 @@ function PolicyTile({
               borderRightColor: sideBorderColor,
               borderBottomColor: sideBorderColor,
               borderLeftColor: sideBorderColor,
+              borderStyle: isDraft ? 'dashed' : 'solid',
               backgroundColor: style.bg,
               opacity: style.opacity,
               boxShadow: ringShadow,
@@ -393,14 +398,17 @@ function PolicyTile({
               </span>
             </div>
 
-            {/* Sandbox-modified badge — bottom right, unmistakable glyph */}
-            {isModified && (
+            {/* Sandbox badge — bottom right, unmistakable glyph */}
+            {(isModified || isDraft) && (
               <div
-                className="absolute bottom-1 right-1 rounded p-0.5"
+                className="absolute bottom-1 right-1 flex items-center gap-0.5 rounded p-0.5"
                 style={{ backgroundColor: 'rgba(217, 119, 6, 0.18)' }}
-                title="Modified in sandbox"
+                title={isDraft ? 'Draft — exists only in the sandbox' : 'Modified in sandbox'}
               >
                 <Beaker className="h-3 w-3" style={{ color: COLORS.warning }} />
+                {isDraft && (
+                  <span className="text-[8px] font-bold" style={{ color: COLORS.warning }}>NEW</span>
+                )}
               </div>
             )}
           </button>

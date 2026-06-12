@@ -16,6 +16,7 @@ import {
   type SandboxAssignments,
   type AssignmentField,
 } from '../lib/sandbox';
+import { TEMPLATE_POLICIES, templateDraftId } from '../data/templatePolicies';
 
 interface PolicyStoreState {
   policies: ConditionalAccessPolicy[];
@@ -34,6 +35,8 @@ interface PolicyStoreState {
   sandboxActive: boolean;
   sandboxOverrides: SandboxOverrides;
   sandboxAssignments: SandboxAssignments;
+  /** Draft policies that exist only in the sandbox (e.g. Fix-in-sandbox templates) */
+  sandboxDrafts: Record<string, ConditionalAccessPolicy>;
   effectivePolicies: ConditionalAccessPolicy[];
 
   // Actions
@@ -44,6 +47,8 @@ interface PolicyStoreState {
   setSandboxActive: (active: boolean) => void;
   setSandboxOverride: (policyId: string, state: PolicyState) => void;
   setAssignmentOverride: (policyId: string, field: AssignmentField, values: string[]) => void;
+  /** Creates (or reuses) a draft from a baseline template; activates the sandbox. Returns the draft id. */
+  createDraftFromTemplate: (checkId: string) => string | null;
   revertPolicySandbox: (policyId: string) => void;
   resetSandbox: () => void;
   /** Merge resolved display names (e.g. from user search picks) for GUID rendering. */
@@ -55,10 +60,14 @@ function computeEffectivePolicies(
   sandboxActive: boolean,
   overrides: SandboxOverrides,
   assignments: SandboxAssignments,
+  drafts: Record<string, ConditionalAccessPolicy>,
 ): ConditionalAccessPolicy[] {
   if (!sandboxActive) return policies;
-  if (Object.keys(overrides).length === 0 && Object.keys(assignments).length === 0) return policies;
-  return applySandboxEdits(policies, overrides, assignments);
+  const draftList = Object.values(drafts);
+  if (Object.keys(overrides).length === 0 && Object.keys(assignments).length === 0 && draftList.length === 0) {
+    return policies;
+  }
+  return [...applySandboxEdits(policies, overrides, assignments), ...draftList];
 }
 
 export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
@@ -74,6 +83,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   sandboxActive: false,
   sandboxOverrides: {},
   sandboxAssignments: {},
+  sandboxDrafts: {},
   effectivePolicies: [],
 
   loadTenantName: async () => {
@@ -100,6 +110,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       const sandboxAssignments = isRefresh
         ? pruneSandboxAssignments(policies, get().sandboxAssignments)
         : {};
+      // Drafts are independent of tenant state — kept on refresh, cleared on switch
+      const sandboxDrafts = isRefresh ? get().sandboxDrafts : {};
       set({
         policies,
         namedLocations,
@@ -112,7 +124,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         sandboxActive,
         sandboxOverrides,
         sandboxAssignments,
-        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments),
+        sandboxDrafts,
+        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts),
       });
     } catch (error) {
       set({
@@ -140,6 +153,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     const sandboxActive = isRefresh ? get().sandboxActive : false;
     const sandboxOverrides = isRefresh ? get().sandboxOverrides : {};
     const sandboxAssignments = isRefresh ? get().sandboxAssignments : {};
+    const sandboxDrafts = isRefresh ? get().sandboxDrafts : {};
     set({
       policies: SAMPLE_POLICIES,
       namedLocations: new Map(),
@@ -153,7 +167,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       sandboxActive,
       sandboxOverrides,
       sandboxAssignments,
-      effectivePolicies: computeEffectivePolicies(SAMPLE_POLICIES, sandboxActive, sandboxOverrides, sandboxAssignments),
+      sandboxDrafts,
+      effectivePolicies: computeEffectivePolicies(SAMPLE_POLICIES, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts),
     });
   },
 
@@ -170,20 +185,32 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       sandboxActive: false,
       sandboxOverrides: {},
       sandboxAssignments: {},
+      sandboxDrafts: {},
       effectivePolicies: [],
     });
   },
 
   setSandboxActive: (active) => {
-    const { policies, sandboxOverrides, sandboxAssignments } = get();
+    const { policies, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
     set({
       sandboxActive: active,
-      effectivePolicies: computeEffectivePolicies(policies, active, sandboxOverrides, sandboxAssignments),
+      effectivePolicies: computeEffectivePolicies(policies, active, sandboxOverrides, sandboxAssignments, sandboxDrafts),
     });
   },
 
   setSandboxOverride: (policyId, state) => {
-    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
+
+    // Drafts have no live counterpart — write the state into the draft itself
+    if (policyId in sandboxDrafts) {
+      const drafts = { ...sandboxDrafts, [policyId]: { ...sandboxDrafts[policyId], state } };
+      set({
+        sandboxDrafts: drafts,
+        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments, drafts),
+      });
+      return;
+    }
+
     const livePolicy = policies.find((p) => p.id === policyId);
     if (!livePolicy) return;
 
@@ -195,12 +222,35 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     }
     set({
       sandboxOverrides: overrides,
-      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, sandboxAssignments),
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, sandboxAssignments, sandboxDrafts),
     });
   },
 
   setAssignmentOverride: (policyId, field, values) => {
-    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
+
+    // Drafts have no live counterpart — write the field into the draft itself
+    if (policyId in sandboxDrafts) {
+      const draft = sandboxDrafts[policyId];
+      const isAppField = field === 'includeApplications' || field === 'excludeApplications';
+      const updated: ConditionalAccessPolicy = {
+        ...draft,
+        conditions: {
+          ...draft.conditions,
+          users: isAppField ? draft.conditions.users : { ...draft.conditions.users, [field]: values },
+          applications: isAppField
+            ? { ...draft.conditions.applications, [field]: values }
+            : draft.conditions.applications,
+        },
+      };
+      const drafts = { ...sandboxDrafts, [policyId]: updated };
+      set({
+        sandboxDrafts: drafts,
+        effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments, drafts),
+      });
+      return;
+    }
+
     const livePolicy = policies.find((p) => p.id === policyId);
     if (!livePolicy) return;
 
@@ -220,25 +270,48 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     }
     set({
       sandboxAssignments: assignments,
-      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, assignments),
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, assignments, sandboxDrafts),
     });
   },
 
+  createDraftFromTemplate: (checkId) => {
+    const template = TEMPLATE_POLICIES.get(checkId);
+    if (!template) return null;
+
+    const draftId = templateDraftId(checkId);
+    const { policies, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
+
+    // Repeat clicks reuse the existing draft (no twins)
+    const drafts = draftId in sandboxDrafts
+      ? sandboxDrafts
+      : { ...sandboxDrafts, [draftId]: { ...template, id: draftId, state: 'enabled' as PolicyState } };
+
+    set({
+      sandboxActive: true, // Fix-in-sandbox always lands in the sandbox
+      sandboxDrafts: drafts,
+      effectivePolicies: computeEffectivePolicies(policies, true, sandboxOverrides, sandboxAssignments, drafts),
+    });
+    return draftId;
+  },
+
   revertPolicySandbox: (policyId) => {
-    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments } = get();
+    const { policies, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
     const overrides = { ...sandboxOverrides };
     const assignments = { ...sandboxAssignments };
+    const drafts = { ...sandboxDrafts };
     delete overrides[policyId];
     delete assignments[policyId];
+    delete drafts[policyId];
     set({
       sandboxOverrides: overrides,
       sandboxAssignments: assignments,
-      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, assignments),
+      sandboxDrafts: drafts,
+      effectivePolicies: computeEffectivePolicies(policies, sandboxActive, overrides, assignments, drafts),
     });
   },
 
   resetSandbox: () => {
-    set({ sandboxOverrides: {}, sandboxAssignments: {}, effectivePolicies: get().policies });
+    set({ sandboxOverrides: {}, sandboxAssignments: {}, sandboxDrafts: {}, effectivePolicies: get().policies });
   },
 
   mergeDisplayNames: (entries) => {

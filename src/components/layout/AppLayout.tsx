@@ -5,6 +5,7 @@ import { MainContent } from './MainContent';
 import { MobileNotice } from '@/components/MobileNotice';
 import { SandboxBar } from '@/components/SandboxBar';
 import { SandboxDiffPanel } from '@/components/SandboxDiffPanel';
+import { ExportChangesDialog } from '@/components/ExportChangesDialog';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS, APP_VERSION } from '@/data/theme';
@@ -15,18 +16,23 @@ export function AppLayout() {
 
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const [diffOpen, setDiffOpen] = useState(false);
+  const [exportOpen, setExportOpen] = useState(false);
 
-  // Leaving sandbox mode closes the comparison panel
+  // Leaving sandbox mode closes the comparison panel and export dialog
   useEffect(() => {
-    if (!sandboxActive) setDiffOpen(false);
+    if (!sandboxActive) {
+      setDiffOpen(false);
+      setExportOpen(false);
+    }
   }, [sandboxActive]);
 
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <MobileNotice />
       <Header />
-      <SandboxBar onViewDiff={() => setDiffOpen(true)} />
+      <SandboxBar onViewDiff={() => setDiffOpen(true)} onExport={() => setExportOpen(true)} />
       <SandboxDiffPanel open={diffOpen} onClose={() => setDiffOpen(false)} />
+      <ExportChangesDialog open={exportOpen} onOpenChange={setExportOpen} />
       <div className="flex flex-1 overflow-hidden">
         {/* Hide (not unmount) for full-area views — ScenarioPanel's form state
             is local useState and must survive switching to Gaps/Impact */}

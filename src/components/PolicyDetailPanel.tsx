@@ -96,9 +96,11 @@ function PanelHeader({
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
   const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
   const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
   const revertPolicySandbox = usePolicyStore((s) => s.revertPolicySandbox);
-  const isModified = policy.id in sandboxOverrides || policy.id in sandboxAssignments;
+  const isDraft = policy.id in sandboxDrafts;
+  const isModified = policy.id in sandboxOverrides || policy.id in sandboxAssignments || isDraft;
 
   const category = inferCategory(policy);
   const meta = CATEGORY_META[category] ?? CATEGORY_META.identity;
@@ -139,16 +141,16 @@ function PanelHeader({
                     className="text-[10px] px-1.5 py-0"
                     style={{ borderColor: COLORS.warning, color: COLORS.warning }}
                   >
-                    Modified
+                    {isDraft ? 'Draft' : 'Modified'}
                   </Badge>
                   <button
                     onClick={() => revertPolicySandbox(policy.id)}
                     className="inline-flex items-center gap-0.5 rounded px-1 py-0.5 text-[10px] hover:bg-accent/50"
                     style={{ color: COLORS.textMuted }}
-                    title="Discard all sandbox changes to this policy"
+                    title={isDraft ? 'Delete this draft' : 'Discard all sandbox changes to this policy'}
                   >
                     <Undo2 className="h-2.5 w-2.5" />
-                    Revert
+                    {isDraft ? 'Delete' : 'Revert'}
                   </button>
                 </>
               )}
@@ -429,8 +431,8 @@ function formatGuestCondition(g: GuestOrExternalUserCondition): string {
 
 const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
-function resolveName(id: string, displayNames: Map<string, string>): string {
-  const name = resolveAssignmentEntryName(id, displayNames);
+function resolveName(id: string, displayNames: Map<string, string>, kind: 'user' | 'app' = 'user'): string {
+  const name = resolveAssignmentEntryName(id, displayNames, kind);
   // Unresolvable GUID — truncate rather than flooding the line
   return GUID_RE.test(id) && name === id ? `${id.slice(0, 8)}…` : name;
 }
@@ -440,7 +442,7 @@ function describeUserLines(
   displayNames: Map<string, string>,
 ): AssignmentLines {
   const u = policy.conditions.users;
-  const resolve = (id: string) => resolveName(id, displayNames);
+  const resolve = (id: string) => resolveName(id, displayNames, 'user');
 
   const include: string[] = [
     ...(u.includeUsers.includes('All') ? ['All users'] : []),
@@ -473,8 +475,7 @@ function describeAppLines(
   if (a.includeUserActions?.length || a.includeAuthenticationContextClassReferences?.length) {
     return null;
   }
-  const resolve = (id: string) =>
-    id === 'All' ? 'All cloud apps' : resolveName(id, displayNames);
+  const resolve = (id: string) => resolveName(id, displayNames, 'app');
   return {
     include: a.includeApplications.map(resolve),
     exclude: a.excludeApplications.map(resolve),

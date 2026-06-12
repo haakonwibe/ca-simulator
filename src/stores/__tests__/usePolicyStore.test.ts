@@ -249,6 +249,87 @@ describe('assignment overrides', () => {
   });
 });
 
+describe('draft policies', () => {
+  it('createDraftFromTemplate creates the draft, activates the sandbox, and appends to effectivePolicies', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+
+    const draftId = usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth');
+
+    const s = usePolicyStore.getState();
+    expect(draftId).toBe('draft-block-legacy-auth');
+    expect(s.sandboxActive).toBe(true);
+    expect(s.sandboxDrafts[draftId!]).toBeDefined();
+    expect(s.sandboxDrafts[draftId!].state).toBe('enabled');
+    expect(s.effectivePolicies).toHaveLength(2);
+    expect(s.effectivePolicies[1].displayName).toContain('[Draft]');
+    expect(s.policies).toHaveLength(1); // live untouched
+  });
+
+  it('repeat clicks reuse the existing draft', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth');
+    usePolicyStore.getState().setSandboxOverride('draft-block-legacy-auth', 'disabled');
+
+    usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth');
+
+    const s = usePolicyStore.getState();
+    expect(Object.keys(s.sandboxDrafts)).toHaveLength(1);
+    expect(s.sandboxDrafts['draft-block-legacy-auth'].state).toBe('disabled'); // edits preserved
+  });
+
+  it('returns null for unknown template ids', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    expect(usePolicyStore.getState().createDraftFromTemplate('no-such-check')).toBeNull();
+  });
+
+  it('state and assignment edits write directly into the draft', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    const draftId = usePolicyStore.getState().createDraftFromTemplate('require-mfa-all-users')!;
+
+    usePolicyStore.getState().setSandboxOverride(draftId, 'enabledForReportingButNotEnforced');
+    usePolicyStore.getState().setAssignmentOverride(draftId, 'excludeUsers', ['break-glass-id']);
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxDrafts[draftId].state).toBe('enabledForReportingButNotEnforced');
+    expect(s.sandboxDrafts[draftId].conditions.users.excludeUsers).toEqual(['break-glass-id']);
+    // No deviation entries recorded for drafts — the draft IS the record
+    expect(s.sandboxOverrides).toEqual({});
+    expect(s.sandboxAssignments).toEqual({});
+  });
+
+  it('revertPolicySandbox deletes a draft', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    const draftId = usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth')!;
+
+    usePolicyStore.getState().revertPolicySandbox(draftId);
+
+    const s = usePolicyStore.getState();
+    expect(s.sandboxDrafts).toEqual({});
+    expect(s.effectivePolicies).toHaveLength(1);
+  });
+
+  it('resetSandbox clears drafts', () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth');
+
+    usePolicyStore.getState().resetSandbox();
+
+    expect(usePolicyStore.getState().sandboxDrafts).toEqual({});
+  });
+
+  it('a live refresh keeps drafts; a source switch clears them', async () => {
+    seedLive([createPolicy({ id: 'p1' })]);
+    usePolicyStore.getState().createDraftFromTemplate('block-legacy-auth');
+
+    loadPoliciesFromGraphMock.mockResolvedValue(graphResult([createPolicy({ id: 'p1' })]));
+    await usePolicyStore.getState().loadFromGraph(); // refresh (live → live)
+    expect(Object.keys(usePolicyStore.getState().sandboxDrafts)).toHaveLength(1);
+
+    usePolicyStore.getState().loadSampleData(); // switch (live → sample)
+    expect(usePolicyStore.getState().sandboxDrafts).toEqual({});
+  });
+});
+
 describe('sandbox across data loads', () => {
   it('switching to sample data starts with a clean sandbox', () => {
     seedLive([createPolicy({ id: 'p1' })]);

@@ -1,23 +1,31 @@
 // components/SandboxBar.tsx — Persistent bar shown while sandbox mode is active.
 // Makes the hypothetical state unmistakable and hosts the change count, diff, and reset.
 
-import { Beaker, RotateCcw, GitCompareArrows } from 'lucide-react';
+import { Beaker, RotateCcw, GitCompareArrows, Download } from 'lucide-react';
 import { COLORS } from '@/data/theme';
 import { Button } from '@/components/ui/button';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 
-export function SandboxBar({ onViewDiff }: { onViewDiff: () => void }) {
+export function SandboxBar({
+  onViewDiff,
+  onExport,
+}: {
+  onViewDiff: () => void;
+  onExport: () => void;
+}) {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
   const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
   const resetSandbox = usePolicyStore((s) => s.resetSandbox);
 
   if (!sandboxActive) return null;
 
-  // Count modified policies (state and/or assignments), not individual edits
+  // Count modified policies (state, assignments, and/or drafts), not individual edits
   const changeCount = new Set([
     ...Object.keys(sandboxOverrides),
     ...Object.keys(sandboxAssignments),
+    ...Object.keys(sandboxDrafts),
   ]).size;
 
   return (
@@ -53,6 +61,16 @@ export function SandboxBar({ onViewDiff }: { onViewDiff: () => void }) {
           variant="ghost"
           size="sm"
           className="h-6 gap-1 px-2 text-xs"
+          onClick={onExport}
+          disabled={changeCount === 0}
+        >
+          <Download className="h-3 w-3" />
+          Export
+        </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-6 gap-1 px-2 text-xs"
           onClick={resetSandbox}
           disabled={changeCount === 0}
         >
@@ -69,9 +87,14 @@ export function SandboxChip() {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
   const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
 
   if (!sandboxActive) return null;
-  if (Object.keys(sandboxOverrides).length === 0 && Object.keys(sandboxAssignments).length === 0) return null;
+  if (
+    Object.keys(sandboxOverrides).length === 0 &&
+    Object.keys(sandboxAssignments).length === 0 &&
+    Object.keys(sandboxDrafts).length === 0
+  ) return null;
 
   return (
     <span

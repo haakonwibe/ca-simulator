@@ -24,7 +24,9 @@ import {
   ChevronDown,
   ExternalLink,
   Beaker,
+  Wrench,
 } from 'lucide-react';
+import { TEMPLATE_POLICIES, templateDraftId } from '@/data/templatePolicies';
 
 // ── Status styling ──
 
@@ -304,6 +306,11 @@ function CheckCard({
             </a>
           </p>
 
+          {/* Fix in sandbox — draft the Microsoft template and watch the check re-run */}
+          {(result.status === 'fail' || result.status === 'partial') && (
+            <FixInSandbox checkId={check.id} />
+          )}
+
           {/* Evidence */}
           {result.status === 'pass' && result.satisfyingPolicies.length > 0 && (
             <EvidenceSection title="Provided by">
@@ -352,6 +359,36 @@ function CheckCard({
         </div>
       )}
     </Card>
+  );
+}
+
+/** Drafts the Microsoft template for this check into the sandbox. */
+function FixInSandbox({ checkId }: { checkId: string }) {
+  const createDraftFromTemplate = usePolicyStore((s) => s.createDraftFromTemplate);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
+
+  if (!TEMPLATE_POLICIES.has(checkId)) return null;
+  const draftExists = templateDraftId(checkId) in sandboxDrafts;
+
+  return (
+    <div className="flex items-center gap-2">
+      <Button
+        variant="outline"
+        size="sm"
+        className="h-6 gap-1 px-2 text-[10px]"
+        style={{ color: COLORS.warning, borderColor: 'rgba(217, 119, 6, 0.4)' }}
+        onClick={() => createDraftFromTemplate(checkId)}
+        disabled={draftExists}
+      >
+        <Wrench className="h-3 w-3" />
+        {draftExists ? 'Draft created' : 'Fix in sandbox'}
+      </Button>
+      <span className="text-[10px]" style={{ color: COLORS.textDim }}>
+        {draftExists
+          ? 'The template draft is in the sandbox — this assessment reflects it.'
+          : "Drafts Microsoft's template policy in the sandbox and re-assesses instantly."}
+      </span>
+    </div>
   );
 }
 

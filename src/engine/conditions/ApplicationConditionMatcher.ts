@@ -11,6 +11,9 @@ import { isAppInBundle, getBundleDisplayName } from '@/data/appBundles';
  * Keys are lowercase for case-insensitive matching.
  */
 const USER_ACTION_URN_MAP: Record<string, string> = {
+  // Microsoft Graph returns the short form; the long form is kept for
+  // backward compatibility with existing fixtures and sample data.
+  'urn:user:registersecurityinfo': 'registerSecurityInformation',
   'urn:user:registersecurityinformation': 'registerSecurityInformation',
   'urn:user:registerdevice': 'registerOrJoinDevices',
 };

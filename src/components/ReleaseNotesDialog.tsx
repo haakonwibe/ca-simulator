@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.4',
+    subtitle: 'Remediation Bridge',
+    features: [
+      {
+        heading: 'Fix in Sandbox',
+        body: "Failing Baseline checks now have a Fix in Sandbox button that drafts the corresponding Microsoft template policy directly into the sandbox. The assessment re-runs instantly — watch the check flip to Pass, see Gaps and Impact react, and tune the draft's scoping with the assignment editor before anything touches your tenant.",
+      },
+      {
+        heading: 'Draft Policies',
+        body: 'Drafts are full policies that exist only in the sandbox, marked with a dashed border and a NEW badge in the Grid. Every view, sweep, and assessment evaluates them like real policies, and they survive tenant refreshes until you delete or reset them.',
+      },
+      {
+        heading: 'Change Plan Export',
+        body: 'Export your entire sandbox — state toggles, scoping edits, and drafts — as a deployment-ready package: a Markdown change summary with a deployment checklist, a Microsoft Graph PowerShell script with plain-language comments per change, and Graph-ready policy JSON. Everything is generated locally in your browser; the app never writes to your tenant.',
+      },
+      {
+        heading: 'Safety by Default',
+        body: 'New policies export in a non-enforcing state — Off by default, matching the portal, with Report-only one click away. The deployment checklist carries the standing reminders: break-glass exclusions, pilot groups, and reviewing before running.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.2',
     subtitle: 'Sandbox Assignment Editing',
     features: [

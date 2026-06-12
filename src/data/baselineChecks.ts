@@ -107,7 +107,9 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
     docsUrl: `${DOCS}/policy-all-users-security-info-registration`,
     whyItMatters: 'Unprotected security info registration lets an attacker with a stolen password enroll their own MFA methods.',
     assessment: {
-      personas: ['member', 'guest', 'admin'],
+      // Members and admins only — Microsoft's template explicitly excludes
+      // guest/external users from this protection (they register elsewhere)
+      personas: ['member', 'admin'],
       target: { kind: 'userAction', action: 'registerSecurityInformation', displayName: 'Security info registration' },
       clientApps: ['browser', 'mobileAppsAndDesktopClients'],
       locations: ['untrusted'], // the template itself excludes trusted locations

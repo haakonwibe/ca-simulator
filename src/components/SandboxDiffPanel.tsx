@@ -29,11 +29,12 @@ export function SandboxDiffPanel({
   const effectivePolicies = usePolicyStore((s) => s.effectivePolicies);
   const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
   const sandboxAssignments = usePolicyStore((s) => s.sandboxAssignments);
+  const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
   const displayNames = usePolicyStore((s) => s.displayNames);
 
   const changes = useMemo(
-    () => describeSandboxChanges(livePolicies, sandboxOverrides, sandboxAssignments, displayNames),
-    [livePolicies, sandboxOverrides, sandboxAssignments, displayNames],
+    () => describeSandboxChanges(livePolicies, sandboxOverrides, sandboxAssignments, displayNames, sandboxDrafts),
+    [livePolicies, sandboxOverrides, sandboxAssignments, displayNames, sandboxDrafts],
   );
 
   // ~2 × 5,760 engine evaluations — only while open with actual changes
@@ -99,8 +100,16 @@ export function SandboxDiffPanel({
                   className="rounded border px-2.5 py-1.5 text-xs"
                   style={{ borderColor: COLORS.border, backgroundColor: COLORS.bgCard }}
                 >
-                  <div className="mb-1 font-medium leading-tight" style={{ color: COLORS.text }}>
+                  <div className="mb-1 flex items-center gap-1.5 font-medium leading-tight" style={{ color: COLORS.text }}>
                     {change.policyName}
+                    {change.isNew && (
+                      <span
+                        className="rounded border px-1 py-0 text-[9px] font-bold"
+                        style={{ color: COLORS.warning, borderColor: 'rgba(217, 119, 6, 0.4)' }}
+                      >
+                        NEW
+                      </span>
+                    )}
                   </div>
                   {change.stateChange && (
                     <div className="flex items-center gap-1.5 text-[11px]">

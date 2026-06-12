@@ -51,6 +51,8 @@ export interface SandboxChange {
   policyName: string;
   stateChange?: { from: PolicyState; to: PolicyState };
   fieldChanges: SandboxFieldChange[];
+  /** True for draft policies that exist only in the sandbox */
+  isNew?: boolean;
 }
 
 export interface SandboxSweepDiff {
@@ -74,18 +76,31 @@ export interface SandboxSweepDiff {
 
 // ── Change list ─────────────────────────────────────────────────────
 
-const SPECIAL_VALUE_LABELS: Record<string, string> = {
-  All: 'All',
+export type AssignmentEntryKind = 'user' | 'app';
+
+// Special values resolve BEFORE the shared display-name map: that map seeds
+// 'All' → 'All Cloud Apps' for the app-context views, which must never leak
+// into user-list labels ("Included users: All Cloud Apps").
+const USER_SPECIAL_LABELS: Record<string, string> = {
+  All: 'All users',
   None: 'None',
   GuestsOrExternalUsers: 'Guests or external users',
 };
 
-/** Resolve an assignment entry (GUID, bundle name, or special value) to a display name. */
+const APP_SPECIAL_LABELS: Record<string, string> = {
+  All: 'All cloud apps',
+  None: 'None',
+};
+
+/** Resolve an assignment entry (special value, GUID, or bundle name) to a display name. */
 export function resolveAssignmentEntryName(
   id: string,
   displayNames?: ReadonlyMap<string, string>,
+  kind: AssignmentEntryKind = 'user',
 ): string {
-  return displayNames?.get(id) ?? getBundleDisplayName(id) ?? SPECIAL_VALUE_LABELS[id] ?? id;
+  const special = (kind === 'app' ? APP_SPECIAL_LABELS : USER_SPECIAL_LABELS)[id];
+  if (special) return special;
+  return displayNames?.get(id) ?? getBundleDisplayName(id) ?? id;
 }
 
 /** Human-oriented list of sandbox deviations, in live policy order. */
@@ -94,8 +109,10 @@ export function describeSandboxChanges(
   overrides: SandboxOverrides,
   assignments: SandboxAssignments = {},
   displayNames?: ReadonlyMap<string, string>,
+  drafts: Record<string, ConditionalAccessPolicy> = {},
 ): SandboxChange[] {
-  const resolve = (id: string): string => resolveAssignmentEntryName(id, displayNames);
+  const kindOf = (field: AssignmentField): AssignmentEntryKind =>
+    field === 'includeApplications' || field === 'excludeApplications' ? 'app' : 'user';
 
   const changes: SandboxChange[] = [];
   for (const policy of livePolicies) {
@@ -113,6 +130,7 @@ export function describeSandboxChanges(
         if (sameMembers(values, live)) continue;
         const liveSet = new Set(live);
         const valueSet = new Set(values);
+        const resolve = (id: string) => resolveAssignmentEntryName(id, displayNames, kindOf(field));
         fieldChanges.push({
           field,
           fieldLabel: ASSIGNMENT_FIELD_LABELS[field],
@@ -131,6 +149,17 @@ export function describeSandboxChanges(
       });
     }
   }
+
+  // Draft policies — new in the sandbox, no live counterpart to diff against
+  for (const draft of Object.values(drafts)) {
+    changes.push({
+      policyId: draft.id,
+      policyName: draft.displayName,
+      fieldChanges: [],
+      isNew: true,
+    });
+  }
+
   return changes;
 }
 

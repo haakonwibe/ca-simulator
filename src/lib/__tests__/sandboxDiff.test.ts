@@ -164,6 +164,39 @@ describe('describeSandboxChanges', () => {
 
     expect(changes).toEqual([]);
   });
+
+  it("special values resolve per field kind — user-list 'All' never borrows the app label", () => {
+    // The shared displayNames map seeds 'All' → 'All Cloud Apps' for app views;
+    // that must not leak into user-list labels (regression: "Included users:
+    // added All Cloud Apps").
+    const pollutedNames = new Map([['All', 'All Cloud Apps']]);
+    const policy = createPolicy({
+      id: 'p1',
+      displayName: 'Scoped',
+      conditions: createBaseConditions({
+        users: {
+          includeUsers: [],
+          excludeUsers: [],
+          includeGroups: ['g1'],
+          excludeGroups: [],
+          includeRoles: [],
+          excludeRoles: [],
+        },
+        applications: { includeApplications: ['Office365'], excludeApplications: [] },
+      }),
+    });
+    const changes = describeSandboxChanges(
+      [policy],
+      {},
+      { p1: { includeUsers: ['All'], includeApplications: ['All'] } },
+      pollutedNames,
+    );
+
+    const userChange = changes[0].fieldChanges.find((fc) => fc.field === 'includeUsers');
+    const appChange = changes[0].fieldChanges.find((fc) => fc.field === 'includeApplications');
+    expect(userChange?.added).toEqual(['All users']);
+    expect(appChange?.added).toEqual(['All cloud apps']);
+  });
 });
 
 // ── compareSweeps ──
