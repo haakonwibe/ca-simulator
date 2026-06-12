@@ -8,6 +8,8 @@ import type { CAEngineResult } from '../engine/models/EvaluationResult';
 
 interface EvaluationState {
   result: CAEngineResult | null;
+  /** Context of the last evaluation — lets the sandbox compute a live-vs-sandbox comparison */
+  lastContext: SimulationContext | null;
   selectedPolicyId: string | null;
   activeView: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact';
 
@@ -22,12 +24,13 @@ const engine = new CAEngine();
 
 export const useEvaluationStore = create<EvaluationState>((set) => ({
   result: null,
+  lastContext: null,
   selectedPolicyId: null,
   activeView: 'grid',
 
   // Synchronous — the engine is fast enough that no loading state is needed
   evaluate: (policies, context) => {
-    set({ result: engine.evaluate(policies, context) });
+    set({ result: engine.evaluate(policies, context), lastContext: context });
   },
 
   setSelectedPolicyId: (id) => {
@@ -39,6 +42,6 @@ export const useEvaluationStore = create<EvaluationState>((set) => ({
   },
 
   clear: () => {
-    set({ result: null, selectedPolicyId: null });
+    set({ result: null, lastContext: null, selectedPolicyId: null });
   },
 }));

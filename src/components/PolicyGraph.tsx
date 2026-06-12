@@ -6,6 +6,7 @@ import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS, CATEGORY_META } from '@/data/theme';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { PolicyEvaluationResult } from '@/engine/models/EvaluationResult';
+import { SandboxStateControl } from '@/components/SandboxStateControl';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -136,8 +137,11 @@ function getEvalVerdict(tileState: TileState, evalResult?: PolicyEvaluationResul
 // ── Main component ──────────────────────────────────────────────────
 
 export function PolicyGraph() {
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const isLoading = usePolicyStore((s) => s.isLoading);
+  const sandboxActive = usePolicyStore((s) => s.sandboxActive);
+  const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
   const result = useEvaluationStore((s) => s.result);
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
   const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
@@ -223,6 +227,9 @@ export function PolicyGraph() {
                   onClick={() => setSelectedPolicyId(selectedPolicyId === policy.id ? null : policy.id)}
                   index={index}
                   hasEvaluation={!!result}
+                  sandboxActive={sandboxActive}
+                  isModified={policy.id in sandboxOverrides}
+                  onStateChange={(state) => setSandboxOverride(policy.id, state)}
                 />
               );
             })}
@@ -247,6 +254,9 @@ function PolicyTile({
   onClick,
   index,
   hasEvaluation,
+  sandboxActive,
+  isModified,
+  onStateChange,
 }: {
   policy: ConditionalAccessPolicy;
   category: string;
@@ -256,6 +266,9 @@ function PolicyTile({
   onClick: () => void;
   index: number;
   hasEvaluation: boolean;
+  sandboxActive: boolean;
+  isModified: boolean;
+  onStateChange: (state: ConditionalAccessPolicy['state']) => void;
 }) {
   const meta = CATEGORY_META[category] ?? CATEGORY_META.identity;
   const style = getTileStyle(tileState);
@@ -295,90 +308,113 @@ function PolicyTile({
     : policy.state === 'enabledForReportingButNotEnforced' ? 'Report-Only' : 'Disabled';
   const evalVerdict = getEvalVerdict(tileState, evalResult);
 
+  // Sandbox-modified tiles get an accent ring (selection ring takes precedence)
+  const ringShadow = isSelected
+    ? `0 0 0 1px ${COLORS.borderActive}`
+    : isModified
+      ? `0 0 0 1px ${COLORS.accentLight}`
+      : style.glow;
+
   return (
-    <Tooltip>
-      <TooltipTrigger asChild>
-        <button
-          onClick={onClick}
-          className="relative flex flex-col rounded-lg border text-left"
-          style={{
-            borderTopColor: topBorderColor,
-            borderRightColor: sideBorderColor,
-            borderBottomColor: sideBorderColor,
-            borderLeftColor: sideBorderColor,
-            backgroundColor: style.bg,
-            opacity: style.opacity,
-            boxShadow: isSelected ? `0 0 0 1px ${COLORS.borderActive}` : style.glow,
-            borderTopWidth: 3,
-            minHeight: '90px',
-            transition: 'all 0.3s ease',
-            transitionDelay: hasEvaluation ? `${index * 30}ms` : '0ms',
-          }}
-          onMouseEnter={(e) => {
-            if (tileState !== 'skipped' && tileState !== 'disabled') {
-              e.currentTarget.style.backgroundColor = COLORS.bgCardHover;
-              e.currentTarget.style.transform = 'scale(1.02)';
-            }
-          }}
-          onMouseLeave={(e) => {
-            e.currentTarget.style.backgroundColor = style.bg;
-            e.currentTarget.style.transform = 'scale(1)';
-          }}
-        >
-          {/* State badge — top right */}
-          <div className="absolute right-1.5 top-1.5">
-            <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+    <div className="relative">
+      <Tooltip>
+        <TooltipTrigger asChild>
+          <button
+            onClick={onClick}
+            className="relative flex w-full flex-col rounded-lg border text-left"
+            style={{
+              borderTopColor: topBorderColor,
+              borderRightColor: sideBorderColor,
+              borderBottomColor: sideBorderColor,
+              borderLeftColor: sideBorderColor,
+              backgroundColor: style.bg,
+              opacity: style.opacity,
+              boxShadow: ringShadow,
+              borderTopWidth: 3,
+              minHeight: '90px',
+              transition: 'all 0.3s ease',
+              transitionDelay: hasEvaluation ? `${index * 30}ms` : '0ms',
+            }}
+            onMouseEnter={(e) => {
+              if (tileState !== 'skipped' && tileState !== 'disabled') {
+                e.currentTarget.style.backgroundColor = COLORS.bgCardHover;
+                e.currentTarget.style.transform = 'scale(1.02)';
+              }
+            }}
+            onMouseLeave={(e) => {
+              e.currentTarget.style.backgroundColor = style.bg;
+              e.currentTarget.style.transform = 'scale(1)';
+            }}
+          >
+            {/* State badge — top right (replaced by the sandbox control when active) */}
+            {!sandboxActive && (
+              <div className="absolute right-1.5 top-1.5">
+                <span className="flex items-center gap-1 text-[9px] text-muted-foreground">
+                  <span
+                    className="inline-block h-1.5 w-1.5 rounded-full"
+                    style={{ backgroundColor: stateBadge.dotColor }}
+                  />
+                  {stateBadge.label}
+                </span>
+              </div>
+            )}
+
+            {/* Evaluation overlay icon — top right below state badge */}
+            {OverlayIcon && (
+              <div className="absolute right-1.5 top-5">
+                <OverlayIcon className="h-3.5 w-3.5" style={{ color: style.iconColor }} />
+              </div>
+            )}
+
+            {/* Policy name */}
+            <div className="flex-1 px-2.5 pt-2 pr-8">
               <span
-                className="inline-block h-1.5 w-1.5 rounded-full"
-                style={{ backgroundColor: stateBadge.dotColor }}
-              />
-              {stateBadge.label}
-            </span>
-          </div>
-
-          {/* Evaluation overlay icon — top right below state badge */}
-          {OverlayIcon && (
-            <div className="absolute right-1.5 top-5">
-              <OverlayIcon className="h-3.5 w-3.5" style={{ color: style.iconColor }} />
+                className="text-[11px] font-medium leading-tight text-foreground"
+                style={{
+                  display: '-webkit-box',
+                  WebkitLineClamp: 2,
+                  WebkitBoxOrient: 'vertical',
+                  overflow: 'hidden',
+                  textDecoration: tileState === 'disabled' ? 'line-through' : undefined,
+                }}
+              >
+                {policy.displayName}
+              </span>
             </div>
-          )}
 
-          {/* Policy name */}
-          <div className="flex-1 px-2.5 pt-2 pr-8">
-            <span
-              className="text-[11px] font-medium leading-tight text-foreground"
-              style={{
-                display: '-webkit-box',
-                WebkitLineClamp: 2,
-                WebkitBoxOrient: 'vertical',
-                overflow: 'hidden',
-                textDecoration: tileState === 'disabled' ? 'line-through' : undefined,
-              }}
-            >
-              {policy.displayName}
-            </span>
-          </div>
-
-          {/* Category icon — bottom left */}
-          <div className="px-2.5 pb-1.5">
-            <span title={meta.label}>
-              <meta.icon className="h-3.5 w-3.5" style={{ color: meta.color }} />
-            </span>
-          </div>
-        </button>
-      </TooltipTrigger>
-      <TooltipContent side="bottom" className="max-w-[250px]">
-        <p className="font-semibold text-xs">{policy.displayName}</p>
-        <p className="text-[10px] text-muted-foreground">
-          {stateLabel} &middot; {meta.label}
-        </p>
-        {evalVerdict && (
-          <p className="text-[10px] mt-0.5" style={{ color: style.iconColor || COLORS.textMuted }}>
-            {evalVerdict}
+            {/* Category icon — bottom left */}
+            <div className="px-2.5 pb-1.5">
+              <span title={meta.label}>
+                <meta.icon className="h-3.5 w-3.5" style={{ color: meta.color }} />
+              </span>
+            </div>
+          </button>
+        </TooltipTrigger>
+        <TooltipContent side="bottom" className="max-w-[250px]">
+          <p className="font-semibold text-xs">{policy.displayName}</p>
+          <p className="text-[10px] text-muted-foreground">
+            {stateLabel} &middot; {meta.label}
           </p>
-        )}
-      </TooltipContent>
-    </Tooltip>
+          {isModified && (
+            <p className="text-[10px] mt-0.5" style={{ color: COLORS.accentLight }}>
+              Modified in sandbox
+            </p>
+          )}
+          {evalVerdict && (
+            <p className="text-[10px] mt-0.5" style={{ color: style.iconColor || COLORS.textMuted }}>
+              {evalVerdict}
+            </p>
+          )}
+        </TooltipContent>
+      </Tooltip>
+
+      {/* Sandbox state control — outside the tile button (no nested buttons) */}
+      {sandboxActive && (
+        <div className="absolute right-1 top-1 z-10">
+          <SandboxStateControl value={policy.state} onChange={onStateChange} />
+        </div>
+      )}
+    </div>
   );
 }
 

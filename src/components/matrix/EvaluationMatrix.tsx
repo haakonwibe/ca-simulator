@@ -134,7 +134,7 @@ const HEADER_STYLE: React.CSSProperties = {
 // ── Main component ──────────────────────────────────────────────────
 
 export function EvaluationMatrix() {
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const displayNames = usePolicyStore((s) => s.displayNames);
   const isLoading = usePolicyStore((s) => s.isLoading);
   const result = useEvaluationStore((s) => s.result);

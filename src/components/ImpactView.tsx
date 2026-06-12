@@ -417,7 +417,7 @@ function ImpactDetail({ impact }: { impact: PolicyImpactSweepResult }) {
 // ── Main component ──
 
 export function ImpactView() {
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const dataSource = usePolicyStore((s) => s.dataSource);
 
   const [sweepResult, setSweepResult] = useState<ImpactSweepResult | null>(null);

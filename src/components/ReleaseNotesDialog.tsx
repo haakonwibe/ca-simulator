@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.5.0',
+    subtitle: 'Policy Sandbox',
+    features: [
+      {
+        heading: 'Sandbox Mode',
+        body: 'Flip the new Sandbox switch in the header to experiment safely. Toggle any policy between On, Report-only, and Off and see the simulated effect across the entire app — without touching your tenant. A persistent bar tracks your changes, and Reset returns everything to live state.',
+      },
+      {
+        heading: 'What If I Enabled This Policy?',
+        body: 'Promote a report-only policy to enabled in the sandbox and watch it enter enforcement: the verdict, Matrix, Flow, Gaps, and Impact views all reflect the hypothetical state. The reverse works too — turn a policy off to preview the coverage you would lose.',
+      },
+      {
+        heading: 'Sandbox vs Live Comparison',
+        body: 'The View Diff panel sweeps all 5,760 scenarios through both your live and sandboxed policy sets, showing the posture score change, newly blocked and newly allowed scenarios, strengthened and weakened controls, and which user types are affected.',
+      },
+      {
+        heading: 'Always Know Where You Are',
+        body: 'Modified policies get a highlight ring and badge, every view carries a Sandbox chip while changes are active, and the verdict banner shows what your live tenant does today whenever the sandbox result differs.',
+      },
+    ],
+  },
+  {
     version: 'v0.4.3',
     subtitle: 'Accuracy & Analysis Refinements',
     features: [

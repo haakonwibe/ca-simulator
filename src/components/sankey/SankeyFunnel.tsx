@@ -36,7 +36,7 @@ interface TooltipState {
 // ── Main component ───────────────────────────────────────────────────
 
 export function SankeyFunnel() {
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const result = useEvaluationStore((s) => s.result);
   const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
 

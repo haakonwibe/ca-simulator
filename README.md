@@ -13,11 +13,12 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 
 ## Why
 
-Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 400+ unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
+Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 500+ unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
 
 ## Features
 
 - **Five visualization modes** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal analysis)
+- **Policy sandbox** — toggle any policy between enabled, report-only, and disabled and see the simulated effect across every view before touching the tenant. The diff panel sweeps all 5,760 scenarios through both the live and sandboxed sets, showing posture delta, newly blocked/allowed scenarios, and affected user types
 - **Impact analysis** — "What if I disabled this policy?" Remove each enabled policy and re-evaluate all 5,760 scenario combinations. Policies classified as Critical/High/Medium/Low severity based on verdict changes, control loss, and fallback existence
 - **Weighted security posture score** — each scenario scored 0–10 based on enforced controls; see how your posture changes when a policy is removed
 - **Contextual fallback analysis** — when disabling a policy creates a gap, see which other policies still provide protection, what remains, and what is lost
@@ -92,6 +93,8 @@ Every step produces a trace entry, giving full visibility into why each policy w
 **Gaps** — Automated coverage gap analysis. Sweeps all combinations of platform, client app, location, and risk level to find unprotected scenarios. Classifies findings by severity (critical/warning/caution/info) and gap type (no-policy, no-MFA, no-device-compliance, legacy-auth). Supports generic personas, selected users, or guided 5-slot persona mapping. Uses full-width layout with inline user picker.
 
 **Impact** — Policy removal impact analysis. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations to measure the effect. Shows a weighted security posture score, affected user breakdown (red/green pills by user type), contextual fallback analysis identifying which other policies still cover the gap, and "other protection active" cards. Policies are classified as Critical, High, Medium, or Low severity.
+
+**Sandbox** — Not a view but a mode: the header switch puts the whole app into a hypothetical state. Toggle policy states on the Grid tiles or detail panel, and every view evaluates the sandboxed set — with a change-tracking bar, a sandbox-vs-live diff panel, and a verdict banner line showing what the live tenant does today whenever results differ.
 
 ## Architecture
 

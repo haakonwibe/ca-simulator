@@ -16,7 +16,7 @@ export function ConsentBanner() {
     usePolicyStore.getState().loadSampleData();
     usePersonaStore.getState().resolveAndCacheSample('sample-user-1');
     const persona = usePersonaStore.getState().resolvedPersonas.get('sample-user-1');
-    const policies = usePolicyStore.getState().policies;
+    const policies = usePolicyStore.getState().effectivePolicies;
     if (persona && policies.length > 0) {
       const context: SimulationContext = {
         user: persona,

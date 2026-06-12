@@ -7,6 +7,7 @@ import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { PolicyEvaluationResult, ConditionMatchResult, ExtractedSessionControls } from '@/engine/models/EvaluationResult';
 import { X, CheckCircle2, XCircle, Minus, AlertTriangle } from 'lucide-react';
 import { Badge } from '@/components/ui/badge';
+import { SandboxStateControl } from '@/components/SandboxStateControl';
 import { Separator } from '@/components/ui/separator';
 import {
   inferCategory,
@@ -22,7 +23,7 @@ export function PolicyDetailPanel() {
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
   const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
   const result = useEvaluationStore((s) => s.result);
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const displayNames = usePolicyStore((s) => s.displayNames);
 
   const policy = policies.find((p) => p.id === selectedPolicyId);
@@ -83,6 +84,11 @@ function PanelHeader({
   policy: ConditionalAccessPolicy;
   onClose: () => void;
 }) {
+  const sandboxActive = usePolicyStore((s) => s.sandboxActive);
+  const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+  const setSandboxOverride = usePolicyStore((s) => s.setSandboxOverride);
+  const isModified = policy.id in sandboxOverrides;
+
   const category = inferCategory(policy);
   const meta = CATEGORY_META[category] ?? CATEGORY_META.identity;
 
@@ -109,13 +115,31 @@ function PanelHeader({
           {policy.displayName}
         </h3>
         <div className="mt-1.5 flex flex-wrap items-center gap-1.5">
-          <Badge
-            variant="outline"
-            className="text-[10px] px-1.5 py-0"
-            style={{ borderColor: stateColor, color: stateColor }}
-          >
-            {stateLabel}
-          </Badge>
+          {sandboxActive ? (
+            <>
+              <SandboxStateControl
+                value={policy.state}
+                onChange={(state) => setSandboxOverride(policy.id, state)}
+              />
+              {isModified && (
+                <Badge
+                  variant="outline"
+                  className="text-[10px] px-1.5 py-0"
+                  style={{ borderColor: COLORS.accentLight, color: COLORS.accentLight }}
+                >
+                  Modified
+                </Badge>
+              )}
+            </>
+          ) : (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0"
+              style={{ borderColor: stateColor, color: stateColor }}
+            >
+              {stateLabel}
+            </Badge>
+          )}
           <Badge
             variant="outline"
             className="gap-1 text-[10px] px-1.5 py-0"

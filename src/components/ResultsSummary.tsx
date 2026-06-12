@@ -1,7 +1,10 @@
 // components/ResultsSummary.tsx — Evaluation results dashboard.
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
+import { usePolicyStore } from '@/stores/usePolicyStore';
+import { CAEngine } from '@/engine/CAEngine';
+import { describeVerdict } from '@/lib/impactAnalysis';
 import { COLORS } from '@/data/theme';
 import type {
   CAEngineResult,
@@ -60,8 +63,22 @@ const VERDICT_CONFIG = {
 
 export function ResultsSummary() {
   const result = useEvaluationStore((s) => s.result);
+  const lastContext = useEvaluationStore((s) => s.lastContext);
   const selectedPolicyId = useEvaluationStore((s) => s.selectedPolicyId);
   const setSelectedPolicyId = useEvaluationStore((s) => s.setSelectedPolicyId);
+
+  const livePolicies = usePolicyStore((s) => s.policies);
+  const sandboxActive = usePolicyStore((s) => s.sandboxActive);
+  const sandboxOverrides = usePolicyStore((s) => s.sandboxOverrides);
+
+  // With sandbox changes active, the displayed result reflects the sandbox set;
+  // also evaluate the live set so the banner can show what the tenant does today.
+  const liveResult = useMemo(() => {
+    if (!sandboxActive || Object.keys(sandboxOverrides).length === 0 || !lastContext) {
+      return null;
+    }
+    return new CAEngine().evaluate(livePolicies, lastContext);
+  }, [sandboxActive, sandboxOverrides, livePolicies, lastContext]);
 
   // Lifted expansion state
   const [expandedCards, setExpandedCards] = useState<Set<string>>(new Set());
@@ -112,7 +129,7 @@ export function ResultsSummary() {
 
   return (
     <div className="space-y-4 p-4">
-      <VerdictBanner result={result} />
+      <VerdictBanner result={result} liveResult={liveResult} />
       {result.finalDecision === 'controlsRequired' && (
         <RequiredControls result={result} />
       )}
@@ -163,7 +180,13 @@ function EmptyState() {
 
 // ── Verdict banner ──────────────────────────────────────────────────
 
-function VerdictBanner({ result }: { result: CAEngineResult }) {
+function VerdictBanner({
+  result,
+  liveResult,
+}: {
+  result: CAEngineResult;
+  liveResult: CAEngineResult | null;
+}) {
   const config = VERDICT_CONFIG[result.finalDecision];
   const Icon = config.icon;
 
@@ -172,6 +195,13 @@ function VerdictBanner({ result }: { result: CAEngineResult }) {
     `${result.skippedPolicies.length} skipped`,
     `${result.reportOnlyPolicies.length} report-only`,
   ].join(' \u00b7 ');
+
+  // Sandbox comparison: show the live verdict when it differs from the sandbox one
+  const liveDiffers =
+    liveResult !== null &&
+    (liveResult.finalDecision !== result.finalDecision ||
+      [...liveResult.requiredControls].sort().join('|') !==
+        [...result.requiredControls].sort().join('|'));
 
   return (
     <Card
@@ -192,6 +222,13 @@ function VerdictBanner({ result }: { result: CAEngineResult }) {
             {config.label}
           </div>
           <div className="text-xs text-muted-foreground">{counts}</div>
+          {liveResult && (
+            <div className="mt-0.5 text-xs" style={{ color: COLORS.warning }}>
+              {liveDiffers
+                ? `Live tenant today: ${describeVerdict(liveResult.finalDecision, liveResult.requiredControls)}`
+                : 'Same verdict as the live tenant'}
+            </div>
+          )}
         </div>
       </div>
     </Card>

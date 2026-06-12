@@ -142,7 +142,7 @@ export function ScenarioPanel() {
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
 
   // Stores
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const policyLoading = usePolicyStore((s) => s.isLoading);
   const policyError = usePolicyStore((s) => s.error);
   const dataSource = usePolicyStore((s) => s.dataSource);
@@ -214,7 +214,7 @@ export function ScenarioPanel() {
     // Auto-select first persona and evaluate (Fix 6)
     usePersonaStore.getState().resolveAndCacheSample('sample-user-1');
     const persona = usePersonaStore.getState().resolvedPersonas.get('sample-user-1');
-    const policies = usePolicyStore.getState().policies;
+    const policies = usePolicyStore.getState().effectivePolicies;
     if (persona && policies.length > 0) {
       const context: SimulationContext = {
         user: persona,
@@ -364,6 +364,15 @@ export function ScenarioPanel() {
     handleEvaluateRef.current = handleEvaluate;
     canEvaluateRef.current = canEvaluate;
   });
+
+  // Sandbox toggles swap out effectivePolicies — re-run the current evaluation
+  // so the visible verdict never goes stale. Result is read via getState() to
+  // avoid depending on it (each evaluate() produces a new result object).
+  useEffect(() => {
+    if (useEvaluationStore.getState().result && canEvaluateRef.current) {
+      handleEvaluateRef.current();
+    }
+  }, [policies]);
 
   useEffect(() => {
     return () => {

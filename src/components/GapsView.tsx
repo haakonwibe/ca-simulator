@@ -582,7 +582,7 @@ function SummaryBar({ groups, filterLabel, onClearFilter }: {
 // ── Main component ──
 
 export function GapsView() {
-  const policies = usePolicyStore((s) => s.policies);
+  const policies = usePolicyStore((s) => s.effectivePolicies);
   const dataSource = usePolicyStore((s) => s.dataSource);
 
   const resolvedPersonas = usePersonaStore((s) => s.resolvedPersonas);

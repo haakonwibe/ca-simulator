@@ -12,6 +12,7 @@ import { ImpactView } from '@/components/ImpactView';
 import { PolicyDetailPanel } from '@/components/PolicyDetailPanel';
 import { ResultsSummary } from '@/components/ResultsSummary';
 import { ConsentBanner } from '@/components/ConsentBanner';
+import { SandboxChip } from '@/components/SandboxBar';
 
 export function MainContent() {
   const activeView = useEvaluationStore((s) => s.activeView);
@@ -77,6 +78,9 @@ export function MainContent() {
           <Zap className="h-3.5 w-3.5" />
           Impact
         </Button>
+        <div className="ml-auto">
+          <SandboxChip />
+        </div>
       </div>
 
       {isFullAreaView ? (

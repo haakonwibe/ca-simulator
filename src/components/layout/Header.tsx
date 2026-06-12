@@ -7,6 +7,7 @@ import type { SimulationContext } from '@/engine/models/SimulationContext';
 import { COLORS, APP_VERSION } from '@/data/theme';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -18,7 +19,7 @@ import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
 import { ReleaseNotesDialog } from '@/components/ReleaseNotesDialog';
 import { AuthErrorBanner } from '@/components/AuthErrorBoundary';
-import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee } from 'lucide-react';
+import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee, Beaker } from 'lucide-react';
 
 export function Header() {
   const accounts = useAuthStore((s) => s.accounts);
@@ -29,6 +30,8 @@ export function Header() {
   const dataSource = usePolicyStore((s) => s.dataSource);
   const tenantName = usePolicyStore((s) => s.tenantName);
   const isLoading = usePolicyStore((s) => s.isLoading);
+  const sandboxActive = usePolicyStore((s) => s.sandboxActive);
+  const setSandboxActive = usePolicyStore((s) => s.setSandboxActive);
   const [aboutOpen, setAboutOpen] = useState(false);
   const [limitationsOpen, setLimitationsOpen] = useState(false);
   const [tipsOpen, setTipsOpen] = useState(false);
@@ -56,7 +59,7 @@ export function Header() {
     usePolicyStore.getState().loadSampleData();
     usePersonaStore.getState().resolveAndCacheSample('sample-user-1');
     const persona = usePersonaStore.getState().resolvedPersonas.get('sample-user-1');
-    const policies = usePolicyStore.getState().policies;
+    const policies = usePolicyStore.getState().effectivePolicies;
     if (persona && policies.length > 0) {
       const context: SimulationContext = {
         user: persona,
@@ -194,6 +197,26 @@ export function Header() {
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+
+        {/* Sandbox mode switch — only meaningful once policies are loaded */}
+        {dataSource !== 'none' && (
+          <div className="ml-3 flex items-center gap-1.5">
+            <Switch
+              id="sandbox-switch"
+              checked={sandboxActive}
+              onCheckedChange={setSandboxActive}
+              aria-label="Toggle sandbox mode"
+            />
+            <label
+              htmlFor="sandbox-switch"
+              className="flex cursor-pointer items-center gap-1 text-xs"
+              style={{ color: sandboxActive ? COLORS.warning : COLORS.textMuted }}
+            >
+              <Beaker className="h-3 w-3" />
+              Sandbox
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Right: GitHub + Auth button */}

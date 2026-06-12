@@ -3,7 +3,7 @@
 
 import { KeyRound, Shield, Laptop, MapPin, Zap, Smartphone, Timer, type LucideIcon } from 'lucide-react';
 
-export const APP_VERSION = 'v0.4.3 beta';
+export const APP_VERSION = 'v0.5.0 beta';
 
 export const COLORS = {
   // Base
