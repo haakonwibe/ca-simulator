@@ -43,6 +43,11 @@ export class ApplicationConditionMatcher implements ConditionMatcher<Application
       return this.evaluateAuthContext(context, condition.includeAuthenticationContextClassReferences);
     }
 
+    // Agent resource targets: matched by 'AllAgentIdResources' or 'All'
+    if (context.application.isAgentResource) {
+      return this.evaluateAgentResource(condition);
+    }
+
     // Standard application matching
     // Step 1: Check exclusions first (exclusion always wins)
     const exclusionResult = this.checkExclusions(context, condition);
@@ -52,6 +57,39 @@ export class ApplicationConditionMatcher implements ConditionMatcher<Application
 
     // Step 2: Check inclusions
     return this.checkInclusions(context, condition);
+  }
+
+  private evaluateAgentResource(condition: ApplicationCondition): ConditionMatchResult {
+    if (condition.excludeApplications.includes('AllAgentIdResources')) {
+      return {
+        conditionType: 'applications',
+        matches: false,
+        reason: 'Agent resources are excluded by this policy',
+        phase: 'exclusion',
+      };
+    }
+    if (condition.includeApplications.includes('AllAgentIdResources')) {
+      return {
+        conditionType: 'applications',
+        matches: true,
+        reason: 'Target matches "All agent resources"',
+        phase: 'inclusion',
+      };
+    }
+    if (condition.includeApplications.includes('All')) {
+      return {
+        conditionType: 'applications',
+        matches: true,
+        reason: 'Agent resource target matches "All resources"',
+        phase: 'inclusion',
+      };
+    }
+    return {
+      conditionType: 'applications',
+      matches: false,
+      reason: 'Policy does not target agent resources',
+      phase: 'inclusion',
+    };
   }
 
   private evaluateUserActions(context: SimulationContext, includeUserActions: string[]): ConditionMatchResult {

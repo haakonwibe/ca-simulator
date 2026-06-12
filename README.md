@@ -25,8 +25,9 @@ Microsoft's built-in What If tool evaluates one scenario at a time with no visua
 - **Weighted security posture score** — each scenario scored 0–10 based on enforced controls; see how your posture changes when a policy is removed
 - **Contextual fallback analysis** — when disabling a policy creates a gap, see which other policies still provide protection, what remains, and what is lost
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
+- **Agent identity support** — simulate the three Entra Agent ID sign-in patterns (agent identities, agent user accounts, humans accessing agent resources) with the documented isolation semantics: agent policies never leak onto user sign-ins, and "All users" doesn't cover agent accounts. Agent policies load with their real targeting via the Graph beta endpoint (v1.0 omits it) and get their own policy category
 - **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
-- **9 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow
+- **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow, ClientApplications (agents), AgentRisk
 - **Full tenant app discovery** — application dropdown shows all enterprise applications and app registrations from your tenant, not just apps referenced in policies
 - **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) based on their allowed combinations
 - **Target resource modes** — simulate against cloud apps, User Actions (security info registration, device registration), or Authentication Contexts (C1–C3)

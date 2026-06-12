@@ -85,11 +85,13 @@ const USER_SPECIAL_LABELS: Record<string, string> = {
   All: 'All users',
   None: 'None',
   GuestsOrExternalUsers: 'Guests or external users',
+  AllAgentIdUsers: 'All agent users',
 };
 
 const APP_SPECIAL_LABELS: Record<string, string> = {
   All: 'All cloud apps',
   None: 'None',
+  AllAgentIdResources: 'All agent resources',
 };
 
 /** Resolve an assignment entry (special value, GUID, or bundle name) to a display name. */

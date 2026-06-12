@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.6',
+    subtitle: 'Agent Identities',
+    features: [
+      {
+        heading: 'Simulate Agent Sign-ins',
+        body: 'A new Identity Type selector covers the three Entra Agent ID patterns: agent identities acting autonomously, agent user accounts, and humans accessing agent resources. Pick an agent, set its risk level, and evaluate — with the full condition trace showing exactly why each policy applied or was skipped.',
+      },
+      {
+        heading: 'Faithful Agent Policy Display',
+        body: "Policies targeting agent identities now load with their real targeting and risk conditions visible. The policy list reads from the Graph beta endpoint, since v1.0 omits agent properties entirely — previously these policies appeared to target nobody. A new lime Agents category marks them across the Grid, Matrix, and detail panel.",
+      },
+      {
+        heading: 'Accurate Agent Semantics',
+        body: 'The engine mirrors the documented Entra behavior: agent-targeting policies never apply to user sign-ins, "All users" does not cover agent user accounts, group scoping does not apply to agents, and agent risk uses direct level matching. Attribute-based agent filters are displayed and flagged as not evaluated rather than guessed.',
+      },
+      {
+        heading: 'Sandbox and Export Aware',
+        body: 'Agent policies work with the sandbox state toggles and live comparison, and exported changes route to the correct Graph endpoint so agent targeting is never lost on write. Sample mode includes a high-risk agent block policy to explore without a tenant.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.4',
     subtitle: 'Remediation Bridge',
     features: [

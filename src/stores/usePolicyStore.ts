@@ -28,6 +28,8 @@ interface PolicyStoreState {
   isLoading: boolean;
   error: string | null;
   dataSource: 'none' | 'live' | 'sample';
+  /** Beta policy endpoint unavailable — agent targeting invisible in loaded policies */
+  agentDetailsUnavailable: boolean;
 
   // Sandbox: hypothetical policy overrides (state + assignments), applied on
   // top of live policies. effectivePolicies is what every consumer reads —
@@ -80,6 +82,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   isLoading: false,
   error: null,
   dataSource: 'none',
+  agentDetailsUnavailable: false,
   sandboxActive: false,
   sandboxOverrides: {},
   sandboxAssignments: {},
@@ -96,7 +99,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
-      const [{ policies, namedLocations, displayNames, authStrengthMap, tenantApplications }, tenantName] = await Promise.all([
+      const [{ policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable }, tenantName] = await Promise.all([
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
@@ -121,6 +124,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         tenantName,
         isLoading: false,
         dataSource: 'live',
+        agentDetailsUnavailable: agentDetailsUnavailable ?? false,
         sandboxActive,
         sandboxOverrides,
         sandboxAssignments,
@@ -164,6 +168,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       isLoading: false,
       error: null,
       dataSource: 'sample',
+      agentDetailsUnavailable: false,
       sandboxActive,
       sandboxOverrides,
       sandboxAssignments,

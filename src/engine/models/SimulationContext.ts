@@ -9,6 +9,17 @@ export interface SimulationContext {
   location: LocationContext;
   risk: RiskContext;
   clientAppType: ClientAppType;
+  /**
+   * Identity type for the sign-in (default 'user').
+   * - 'agentIdentity': agent acting as itself — only policies with agent
+   *   targeting (clientApplications.includeAgentIdServicePrincipals) apply;
+   *   the users condition is skipped.
+   * - 'agentUser': agent's user account — matched only by 'AllAgentIdUsers'
+   *   or its own id; 'All' and groups do NOT match (documented limitations).
+   */
+  identityType?: 'user' | 'agentUser' | 'agentIdentity';
+  /** Agent details for agentIdentity sign-ins */
+  agent?: AgentContext;
   /** Authentication flow type for the sign-in attempt */
   authenticationFlow?: 'none' | 'deviceCodeFlow' | 'authenticationTransfer';
   /** Authentication strength level: 0=none, 1=MFA, 2=Passwordless MFA, 3=Phishing-resistant MFA */
@@ -39,6 +50,14 @@ export interface ApplicationContext {
   /** User action instead of app access */
   userAction?: 'registerSecurityInformation' | 'registerOrJoinDevices';
   authenticationContext?: string;
+  /** Target is an agent resource — matched by 'AllAgentIdResources' in app lists */
+  isAgentResource?: boolean;
+}
+
+export interface AgentContext {
+  /** The agent identity's service principal id */
+  servicePrincipalId: string;
+  displayName: string;
 }
 
 export interface DeviceContext {
@@ -59,6 +78,8 @@ export interface RiskContext {
   signInRiskLevel: RiskLevel | 'none';
   userRiskLevel: RiskLevel | 'none';
   insiderRiskLevel: InsiderRiskLevel | 'none';
+  /** Agent risk (ID Protection for agents) — only meaningful for agentIdentity sign-ins */
+  agentRiskLevel?: RiskLevel | 'none';
 }
 
 export type SatisfiedControl =

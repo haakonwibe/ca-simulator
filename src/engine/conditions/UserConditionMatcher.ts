@@ -24,7 +24,12 @@ import type { SimulationContext } from '../models/SimulationContext';
  */
 export class UserConditionMatcher implements ConditionMatcher<UserCondition> {
   evaluate(context: SimulationContext, condition: UserCondition): ConditionMatchResult {
-    const user = context.user;
+    // Agent user accounts have their own matching rules (documented Microsoft
+    // limitations): 'All' does NOT cover them, groups do NOT scope them —
+    // only 'AllAgentIdUsers' or a direct id match.
+    if (context.identityType === 'agentUser') {
+      return this.evaluateAgentUser(context, condition);
+    }
 
     // Step 1: Check exclusions first (exclusion always wins)
     const exclusionResult = this.checkExclusions(context, condition);
@@ -35,6 +40,46 @@ export class UserConditionMatcher implements ConditionMatcher<UserCondition> {
     // Step 2: Check inclusions
     const inclusionResult = this.checkInclusions(context, condition);
     return inclusionResult;
+  }
+
+  private evaluateAgentUser(context: SimulationContext, condition: UserCondition): ConditionMatchResult {
+    const user = context.user;
+
+    // Exclusion always wins
+    if (condition.excludeUsers.includes(user.id) || condition.excludeUsers.includes('AllAgentIdUsers')) {
+      return {
+        conditionType: 'users',
+        matches: false,
+        reason: `Agent user "${user.displayName}" is excluded`,
+        phase: 'exclusion',
+        details: { excludedById: user.id },
+      };
+    }
+
+    if (condition.includeUsers.includes('AllAgentIdUsers')) {
+      return {
+        conditionType: 'users',
+        matches: true,
+        reason: `Agent user "${user.displayName}" matches "All agent users"`,
+        phase: 'inclusion',
+      };
+    }
+    if (condition.includeUsers.includes(user.id)) {
+      return {
+        conditionType: 'users',
+        matches: true,
+        reason: `Agent user "${user.displayName}" is directly included`,
+        phase: 'inclusion',
+        details: { matchedById: user.id },
+      };
+    }
+
+    return {
+      conditionType: 'users',
+      matches: false,
+      reason: `Agent user "${user.displayName}" not targeted — "All users" and group scoping do not cover agent user accounts`,
+      phase: 'inclusion',
+    };
   }
 
   private checkExclusions(context: SimulationContext, condition: UserCondition): ConditionMatchResult | null {

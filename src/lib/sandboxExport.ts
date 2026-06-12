@@ -28,6 +28,8 @@ export interface PolicyModification {
   change: SandboxChange;
   /** Graph PATCH body — state and/or the complete updated conditions object */
   patchBody: Record<string, unknown>;
+  /** Agent-bearing policies must PATCH via beta — v1.0 silently strips agent targeting */
+  requiresBetaEndpoint: boolean;
 }
 
 export interface PolicyCreation {
@@ -76,6 +78,13 @@ export function toGraphConditions(conditions: PolicyConditions): Record<string, 
     body.insiderRiskLevels = conditions.insiderRiskLevels.join(',');
   } else {
     delete body.insiderRiskLevels;
+  }
+
+  // Agent risk is the same flagged-string wire format (beta)
+  if (conditions.agentIdRiskLevels?.length) {
+    body.agentIdRiskLevels = conditions.agentIdRiskLevels.join(',');
+  } else {
+    delete body.agentIdRiskLevels;
   }
 
   const users = conditions.users;
@@ -237,8 +246,12 @@ function buildPowershellScript(
       if (fc.removed.length > 0) parts.push(`removed ${fc.removed.join(', ')}`);
       lines.push(`#    ${fc.fieldLabel}: ${parts.join('; ')}`);
     }
+    if (mod.requiresBetaEndpoint) {
+      lines.push('#    Uses the beta endpoint: this policy carries agent targeting, which v1.0 writes would strip.');
+    }
+    const apiVersion = mod.requiresBetaEndpoint ? 'beta' : 'v1.0';
     lines.push(
-      `Invoke-MgGraphRequest -Method PATCH -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies/${mod.policyId}' -ContentType 'application/json' -Body @'`,
+      `Invoke-MgGraphRequest -Method PATCH -Uri 'https://graph.microsoft.com/${apiVersion}/identity/conditionalAccess/policies/${mod.policyId}' -ContentType 'application/json' -Body @'`,
       JSON.stringify(mod.patchBody, null, 2),
       "'@",
       '',
@@ -287,11 +300,15 @@ export function buildChangePlan(
     } else {
       const effectivePolicy = effectiveById.get(change.policyId);
       if (!effectivePolicy) continue;
+      const requiresBetaEndpoint =
+        effectivePolicy.conditions.clientApplications !== undefined ||
+        (effectivePolicy.conditions.agentIdRiskLevels?.length ?? 0) > 0;
       modifications.push({
         policyId: change.policyId,
         policyName: change.policyName,
         change,
         patchBody: toGraphPatchBody(change, effectivePolicy),
+        requiresBetaEndpoint,
       });
     }
   }
@@ -302,6 +319,7 @@ export function buildChangePlan(
       modifications: modifications.map((m) => ({
         policyId: m.policyId,
         displayName: m.policyName,
+        apiVersion: m.requiresBetaEndpoint ? 'beta' : 'v1.0',
         patch: m.patchBody,
       })),
       creations: creations.map((c) => c.policyBody),

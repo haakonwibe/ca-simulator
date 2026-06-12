@@ -42,8 +42,13 @@ export function getCellSummary(
 ): string {
   const c = policy.conditions;
   switch (columnKey) {
-    case 'users':
+    case 'users': {
+      // Agent-identity targeting takes over the Users cell (the users
+      // condition on such policies is typically the inert ['None'])
+      const agentSummary = summarizeAgentTargeting(c);
+      if (agentSummary) return agentSummary;
       return summarizeUsers(c.users, displayNames);
+    }
     case 'apps':
       return summarizeApps(c.applications, displayNames);
     case 'platform':
@@ -61,6 +66,15 @@ export function getCellSummary(
     default:
       return '\u00b7';
   }
+}
+
+export function summarizeAgentTargeting(c: ConditionalAccessPolicy['conditions']): string | null {
+  const ca = c.clientApplications;
+  const include = ca?.includeAgentIdServicePrincipals ?? [];
+  if (include.length === 0) return null;
+  const base = include.includes('All') ? 'Agents(All)' : `Agents(${include.length})`;
+  const exclusions = ca?.excludeAgentIdServicePrincipals?.length ?? 0;
+  return exclusions > 0 ? `${base} −${exclusions}` : base;
 }
 
 function summarizeUsers(
@@ -511,6 +525,17 @@ export function findEvalResult(
 
 export function inferCategory(policy: ConditionalAccessPolicy): string {
   const { conditions, grantControls } = policy;
+
+  // Agent-targeted policies are their own category regardless of controls
+  if (
+    conditions.clientApplications?.includeAgentIdServicePrincipals?.length ||
+    conditions.clientApplications?.excludeAgentIdServicePrincipals?.length ||
+    conditions.agentIdRiskLevels?.length ||
+    conditions.users.includeUsers.includes('AllAgentIdUsers') ||
+    conditions.applications.includeApplications.includes('AllAgentIdResources')
+  ) {
+    return 'agents';
+  }
 
   if (grantControls?.builtInControls?.includes('block')) return 'security';
 

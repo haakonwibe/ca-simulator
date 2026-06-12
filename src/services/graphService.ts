@@ -12,6 +12,7 @@ import type {
   PlatformCondition,
   LocationCondition,
   DeviceFilterCondition,
+  ClientApplicationsCondition,
   GrantControls,
   SessionControls,
   ClientAppType,
@@ -49,6 +50,7 @@ const WELL_KNOWN_APPS: Record<string, string> = {
   'None': 'None',
   'Office365': 'Office 365',
   'MicrosoftAdminPortals': 'Microsoft Admin Portals',
+  'AllAgentIdResources': 'All Agent Resources',
   '00000002-0000-0ff1-ce00-000000000000': 'Office 365 Exchange Online',
   '00000003-0000-0ff1-ce00-000000000000': 'Office 365 SharePoint Online',
   '00000003-0000-0000-c000-000000000000': 'Microsoft Graph',
@@ -81,12 +83,29 @@ const SPECIAL_IDS = new Set([
   'All', 'None', 'GuestsOrExternalUsers',
   'Office365', 'MicrosoftAdminPortals',
   'AllTrusted',
+  'AllAgentIdUsers', 'AllAgentIdResources',
 ]);
 
 // ── 1. Fetch CA Policies ────────────────────────────────────────────
+//
+// The policy LIST uses the beta endpoint: v1.0 strips agent targeting
+// entirely (includeAgentIdServicePrincipals, agentIdRiskLevels), leaving
+// agent policies looking like they target nobody — verified against a live
+// tenant. Beta is a superset for normal policies; unknown extras are
+// dropped by normalization. On beta failure we fall back to v1.0 and flag
+// agent details as unavailable rather than failing the load.
 
-async function fetchPolicies(token: string): Promise<RawGraphPolicy[]> {
-  return fetchAllPages<RawGraphPolicy>('/identity/conditionalAccess/policies', token);
+const BETA_POLICIES_URL = 'https://graph.microsoft.com/beta/identity/conditionalAccess/policies';
+
+async function fetchPolicies(token: string): Promise<{ raw: RawGraphPolicy[]; agentDetailsUnavailable: boolean }> {
+  try {
+    const raw = await fetchAllPages<RawGraphPolicy>(BETA_POLICIES_URL, token);
+    return { raw, agentDetailsUnavailable: false };
+  } catch (error) {
+    if (error instanceof GraphPermissionError) throw error; // consent problems are not endpoint problems
+    const raw = await fetchAllPages<RawGraphPolicy>('/identity/conditionalAccess/policies', token);
+    return { raw, agentDetailsUnavailable: true };
+  }
 }
 
 // ── 2. Fetch Named Locations ────────────────────────────────────────
@@ -476,6 +495,58 @@ function normalizeSessionControls(raw: Record<string, unknown> | null | undefine
   return hasAny ? result : null;
 }
 
+/**
+ * Graph models some risk conditions as comma-flagged strings (insiderRiskLevels,
+ * agentIdRiskLevels) rather than collections. Accepts string, array, or null
+ * and always produces a clean array (or undefined when unset).
+ */
+function normalizeFlaggedLevels<T extends string>(raw: unknown): T[] | undefined {
+  if (raw == null) return undefined;
+  const values = Array.isArray(raw)
+    ? raw.map(String)
+    : String(raw).split(',').map((v) => v.trim());
+  const filtered = values.filter((v) => v.length > 0);
+  return filtered.length > 0 ? (filtered as T[]) : undefined;
+}
+
+function normalizeFilterRule(raw: unknown): DeviceFilterCondition | undefined {
+  if (!raw || typeof raw !== 'object') return undefined;
+  const filter = raw as Record<string, unknown>;
+  if (!filter.rule) return undefined;
+  return {
+    mode: (filter.mode as 'include' | 'exclude') ?? 'include',
+    rule: filter.rule as string,
+  };
+}
+
+function normalizeClientApplications(raw: Record<string, unknown> | null | undefined): ClientApplicationsCondition | undefined {
+  if (!raw) return undefined;
+
+  const result: ClientApplicationsCondition = {
+    includeServicePrincipals: (raw.includeServicePrincipals as string[]) ?? [],
+    excludeServicePrincipals: (raw.excludeServicePrincipals as string[]) ?? [],
+  };
+  const includeAgents = raw.includeAgentIdServicePrincipals as string[] | undefined;
+  const excludeAgents = raw.excludeAgentIdServicePrincipals as string[] | undefined;
+  if (includeAgents?.length) result.includeAgentIdServicePrincipals = includeAgents;
+  if (excludeAgents?.length) result.excludeAgentIdServicePrincipals = excludeAgents;
+  const spFilter = normalizeFilterRule(raw.servicePrincipalFilter);
+  if (spFilter) result.servicePrincipalFilter = spFilter;
+  const agentFilter = normalizeFilterRule(raw.agentIdServicePrincipalFilter);
+  if (agentFilter) result.agentIdServicePrincipalFilter = agentFilter;
+
+  // Drop the condition entirely when it carries no targeting (the common
+  // case: Graph returns an empty clientApplications block on every policy)
+  const hasContent =
+    result.includeServicePrincipals.length > 0 ||
+    result.excludeServicePrincipals.length > 0 ||
+    result.includeAgentIdServicePrincipals !== undefined ||
+    result.excludeAgentIdServicePrincipals !== undefined ||
+    result.servicePrincipalFilter !== undefined ||
+    result.agentIdServicePrincipalFilter !== undefined;
+  return hasContent ? result : undefined;
+}
+
 function normalizePolicies(
   rawPolicies: RawGraphPolicy[],
   _directoryObjectNames: Map<string, string>,
@@ -496,7 +567,10 @@ function normalizePolicies(
       devices: normalizeDeviceFilter(cond.devices),
       authenticationFlows: normalizeAuthenticationFlows(cond.authenticationFlows),
       servicePrincipalRiskLevels: (cond.servicePrincipalRiskLevels as RiskLevel[]) ?? undefined,
-      insiderRiskLevels: (cond.insiderRiskLevels as InsiderRiskLevel[]) ?? undefined,
+      // Graph wire format is a comma-flagged string, not a collection
+      insiderRiskLevels: normalizeFlaggedLevels<InsiderRiskLevel>(cond.insiderRiskLevels),
+      clientApplications: normalizeClientApplications(cond.clientApplications),
+      agentIdRiskLevels: normalizeFlaggedLevels<RiskLevel>(cond.agentIdRiskLevels),
     };
 
     return {
@@ -640,9 +714,11 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   displayNames: Map<string, string>;
   authStrengthMap: Map<string, number>;
   tenantApplications: TenantApplication[];
+  /** True when the beta policy endpoint failed and v1.0 fallback was used — agent targeting is invisible */
+  agentDetailsUnavailable: boolean;
 }> {
   // Fetch policies, named locations, and auth strength policies in parallel
-  const [rawPolicies, namedLocations, authStrengthMap] = await Promise.all([
+  const [{ raw: rawPolicies, agentDetailsUnavailable }, namedLocations, authStrengthMap] = await Promise.all([
     fetchPolicies(token),
     fetchNamedLocations(token),
     // Re-throw 403 (ConsentBanner); other failures degrade to an empty map,
@@ -689,5 +765,8 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   // Normalize raw Graph data into engine-ready policies
   const policies = normalizePolicies(rawPolicies, directoryObjectNames, appNames, namedLocations);
 
-  return { policies, namedLocations, displayNames, authStrengthMap, tenantApplications };
+  return { policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable };
 }
+
+// Exported for testing (fixture-based normalization tests)
+export { normalizePolicies };

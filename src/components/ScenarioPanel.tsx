@@ -51,7 +51,16 @@ import {
   ArrowRightLeft,
   Target,
   Fingerprint,
+  Bot,
 } from 'lucide-react';
+
+const GENERIC_AGENT_ID = 'generic-agent';
+
+const IDENTITY_TYPE_OPTIONS = [
+  { value: 'user', label: 'User' },
+  { value: 'agentIdentity', label: 'Agent identity' },
+  { value: 'agentUser', label: 'Agent user account' },
+] as const;
 
 // ── Static option lists ─────────────────────────────────────────────
 
@@ -147,6 +156,8 @@ export function ScenarioPanel() {
   const policyError = usePolicyStore((s) => s.error);
   const dataSource = usePolicyStore((s) => s.dataSource);
   const authStrengthMap = usePolicyStore((s) => s.authStrengthMap);
+  const displayNames = usePolicyStore((s) => s.displayNames);
+  const agentDetailsUnavailable = usePolicyStore((s) => s.agentDetailsUnavailable);
   const resolvedPersonas = usePersonaStore((s) => s.resolvedPersonas);
   const selectedPersonaId = usePersonaStore((s) => s.selectedPersonaId);
   const isResolving = usePersonaStore((s) => s.isResolving);
@@ -155,6 +166,9 @@ export function ScenarioPanel() {
   const isSampleMode = dataSource === 'sample';
 
   // Form state
+  const [identityType, setIdentityType] = useState<'user' | 'agentIdentity' | 'agentUser'>('user');
+  const [selectedAgentId, setSelectedAgentId] = useState<string>(GENERIC_AGENT_ID);
+  const [agentRisk, setAgentRisk] = useState<RiskLevel | 'none'>('none');
   const [targetMode, setTargetMode] = useState<'resources' | 'userActions' | 'authContext'>('resources');
   const [userAction, setUserAction] = useState<string>('registerSecurityInformation');
   const [authContext, setAuthContext] = useState<string>('c1');
@@ -293,12 +307,35 @@ export function ScenarioPanel() {
     [tenantApplications],
   );
 
+  // Agent identities referenced by loaded policies (plus a synthetic generic)
+  const agentOptions = useMemo(() => {
+    const ids = new Set<string>();
+    for (const p of policies) {
+      const ca = p.conditions.clientApplications;
+      for (const id of [
+        ...(ca?.includeAgentIdServicePrincipals ?? []),
+        ...(ca?.excludeAgentIdServicePrincipals ?? []),
+      ]) {
+        if (id !== 'All') ids.add(id);
+      }
+    }
+    return [
+      { value: GENERIC_AGENT_ID, label: 'Generic agent' },
+      ...[...ids].map((id) => ({ value: id, label: displayNames.get(id) ?? `${id.slice(0, 8)}…` })),
+    ];
+  }, [policies, displayNames]);
+
+  const selectedAgentLabel =
+    agentOptions.find((a) => a.value === selectedAgentId)?.label ?? 'Generic agent';
+
   // ── Evaluate ──────────────────────────────────────────────────────
 
-  const canEvaluate = policies.length > 0 && selectedPersona !== null;
+  const canEvaluate =
+    policies.length > 0 && (identityType === 'agentIdentity' || selectedPersona !== null);
 
   const handleEvaluate = () => {
-    if (!selectedPersona) return;
+    const isAgentIdentity = identityType === 'agentIdentity';
+    if (!isAgentIdentity && !selectedPersona) return;
 
     const application = targetMode === 'userActions'
       ? {
@@ -315,13 +352,28 @@ export function ScenarioPanel() {
       : {
           appId,
           displayName:
-            APP_BUNDLES.find((b) => b.id === appId)?.displayName
-            ?? tenantApps.find((a) => a.value === appId)?.label
-            ?? appId,
+            appId === 'AllAgentIdResources'
+              ? 'All Agent Resources'
+              : APP_BUNDLES.find((b) => b.id === appId)?.displayName
+                ?? tenantApps.find((a) => a.value === appId)?.label
+                ?? appId,
+          ...(appId === 'AllAgentIdResources' ? { isAgentResource: true } : {}),
         };
 
     const context: SimulationContext = {
-      user: selectedPersona,
+      user: isAgentIdentity
+        ? {
+            id: GENERIC_AGENT_ID,
+            displayName: selectedAgentLabel,
+            userType: 'member',
+            memberOfGroupIds: [],
+            directoryRoleIds: [],
+          }
+        : selectedPersona!,
+      identityType,
+      ...(isAgentIdentity
+        ? { agent: { servicePrincipalId: selectedAgentId, displayName: selectedAgentLabel } }
+        : {}),
       application,
       device: {
         platform: platform === 'any' ? undefined : (platform as DevicePlatform),
@@ -342,12 +394,16 @@ export function ScenarioPanel() {
         signInRiskLevel: signInRisk,
         userRiskLevel: userRisk,
         insiderRiskLevel: insiderRisk,
+        ...(isAgentIdentity ? { agentRiskLevel: agentRisk } : {}),
       },
       clientAppType: clientApp,
       authenticationFlow: authFlow === 'none' ? undefined : authFlow,
-      authenticationStrengthLevel: deriveAuthStrengthLevel(authentication),
+      // Agents don't satisfy human auth controls — MFA/device/app-protection inputs are user-only
+      authenticationStrengthLevel: isAgentIdentity ? 0 : deriveAuthStrengthLevel(authentication),
       customAuthStrengthMap: authStrengthMap.size > 0 ? authStrengthMap : undefined,
-      satisfiedControls: deriveSatisfiedControls({ authentication, deviceState, appProtection, passwordChanged }),
+      satisfiedControls: isAgentIdentity
+        ? []
+        : deriveSatisfiedControls({ authentication, deviceState, appProtection, passwordChanged }),
     };
 
     evaluate(policies, context);
@@ -472,13 +528,87 @@ export function ScenarioPanel() {
               </Button>
             </div>
           )}
+          {agentDetailsUnavailable && policies.length > 0 && (
+            <p className="mt-1.5 text-[10px] leading-tight" style={{ color: COLORS.warning }}>
+              Agent policy details unavailable (beta endpoint unreachable) — agent
+              targeting is not visible in these policies.
+            </p>
+          )}
         </div>
 
         <Separator />
 
-        {/* User / Persona search + Authentication */}
+        {/* Identity type */}
         <div>
-          <SectionLabel icon={<User className="h-3 w-3" />} label="User" />
+          <SectionLabel icon={<Bot className="h-3 w-3" />} label="Identity Type" />
+          <Select
+            value={identityType}
+            onValueChange={(v: 'user' | 'agentIdentity' | 'agentUser') => { clearResults(); setIdentityType(v); }}
+          >
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {IDENTITY_TYPE_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                  {opt.label}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+          {identityType === 'agentUser' && (
+            <p className="mt-1 text-[10px] leading-tight" style={{ color: COLORS.textDim }}>
+              Agent user accounts are only matched by "All agent users" or a direct
+              id — "All users" and group scoping do not cover them.
+            </p>
+          )}
+        </div>
+
+        {/* Agent picker + risk (agent identity mode) */}
+        {identityType === 'agentIdentity' && (
+          <div className="space-y-4">
+            <div>
+              <SectionLabel icon={<Bot className="h-3 w-3" />} label="Agent" />
+              <Select value={selectedAgentId} onValueChange={(v) => { clearResults(); setSelectedAgentId(v); }}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {agentOptions.map((opt) => (
+                    <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                      {opt.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {agentOptions.length > 1 && (
+                <p className="mt-1 text-[10px] leading-tight" style={{ color: COLORS.textDim }}>
+                  Agents referenced by loaded policies appear here.
+                </p>
+              )}
+            </div>
+            <div>
+              <SectionLabel icon={<ShieldAlert className="h-3 w-3" />} label="Agent Risk" />
+              <Select value={agentRisk} onValueChange={(v: RiskLevel | 'none') => { clearResults(); setAgentRisk(v); }}>
+                <SelectTrigger className="h-8 text-xs">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {(['none', 'low', 'medium', 'high'] as const).map((level) => (
+                    <SelectItem key={level} value={level} className="text-xs">
+                      {level === 'none' ? 'None' : level.charAt(0).toUpperCase() + level.slice(1)}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+        )}
+
+        {/* User / Persona search + Authentication (not applicable to agent identities) */}
+        {identityType !== 'agentIdentity' && (
+        <div>
+          <SectionLabel icon={<User className="h-3 w-3" />} label={identityType === 'agentUser' ? 'Agent User' : 'User'} />
 
           {/* Quick-select chips for previously resolved personas */}
           {resolvedPersonas.size > 0 && (
@@ -580,8 +710,10 @@ export function ScenarioPanel() {
             </div>
           )}
         </div>
+        )}
 
-        {/* Authentication */}
+        {/* Authentication (human identities only — agents don't satisfy MFA) */}
+        {identityType !== 'agentIdentity' && (
         <div>
           <SectionLabel icon={<KeyRound className="h-3 w-3" />} label="Authentication" />
           <Select value={authentication} onValueChange={(v: 'none' | 'mfa' | 'passwordlessMfa' | 'phishingResistantMfa') => { clearResults(); setAuthentication(v); }}>
@@ -597,6 +729,7 @@ export function ScenarioPanel() {
             </SelectContent>
           </Select>
         </div>
+        )}
 
         {/* Authentication Flow */}
         <div>
@@ -653,6 +786,9 @@ export function ScenarioPanel() {
                       {bundle.displayName}
                     </SelectItem>
                   ))}
+                  <SelectItem value="AllAgentIdResources" className="text-xs">
+                    All Agent Resources
+                  </SelectItem>
                 </SelectGroup>
                 {tenantApps.length > 0 && (
                   <>

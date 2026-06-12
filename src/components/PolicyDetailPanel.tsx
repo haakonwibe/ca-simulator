@@ -463,6 +463,24 @@ function describeUserLines(
     exclude.push(formatGuestCondition(u.excludeGuestsOrExternalUsers));
   }
 
+  // Agent identity targeting rides in clientApplications but belongs to the
+  // "who does this apply to" story — surface it on the Users row
+  const ca = policy.conditions.clientApplications;
+  for (const id of ca?.includeAgentIdServicePrincipals ?? []) {
+    include.push(id === 'All' ? 'All agent identities' : `Agent: ${resolve(id)}`);
+  }
+  for (const id of ca?.excludeAgentIdServicePrincipals ?? []) {
+    exclude.push(id === 'All' ? 'All agent identities' : `Agent: ${resolve(id)}`);
+  }
+  if (ca?.agentIdServicePrincipalFilter) {
+    include.push('Agent attribute filter (not evaluated)');
+  }
+  // The inert 'None' marker on agent-only policies adds noise — drop it
+  if ((ca?.includeAgentIdServicePrincipals?.length ?? 0) > 0) {
+    const noneIdx = include.indexOf('None');
+    if (noneIdx >= 0) include.splice(noneIdx, 1);
+  }
+
   return { include, exclude };
 }
 

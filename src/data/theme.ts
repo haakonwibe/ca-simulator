@@ -1,9 +1,9 @@
 // data/theme.ts — Single source of truth for the application color system.
 // CSS variables in index.css map these values into Shadcn's token system.
 
-import { KeyRound, Shield, Laptop, MapPin, Zap, Smartphone, Timer, type LucideIcon } from 'lucide-react';
+import { KeyRound, Shield, Laptop, MapPin, Zap, Smartphone, Timer, Bot, type LucideIcon } from 'lucide-react';
 
-export const APP_VERSION = 'v0.6.4 beta';
+export const APP_VERSION = 'v0.6.6 beta';
 
 export const COLORS = {
   // Base
@@ -55,6 +55,7 @@ export const COLORS = {
   risk: '#ec4899',
   appProtection: '#8b5cf6',
   session: '#14b8a6',
+  agents: '#84cc16',
 } as const;
 
 export const CATEGORY_META: Record<string, { color: string; icon: LucideIcon; label: string }> = {
@@ -65,4 +66,5 @@ export const CATEGORY_META: Record<string, { color: string; icon: LucideIcon; la
   risk:             { color: COLORS.risk,           icon: Zap,        label: 'Risk' },
   'app-protection': { color: COLORS.appProtection, icon: Smartphone, label: 'App Protection' },
   session:          { color: COLORS.session,        icon: Timer,      label: 'Session' },
+  agents:           { color: COLORS.agents,         icon: Bot,        label: 'Agents' },
 };

@@ -598,6 +598,42 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
       persistentBrowser: { isEnabled: true, mode: 'never' },
     },
   },
+
+  // 20. Block high-risk agent identities (mirrors the Microsoft portal
+  // template; report-only by default, exactly as the portal deploys it)
+  {
+    id: 'ca-policy-020-block-high-risk-agents',
+    displayName: 'CA020: Block high-risk agent identities',
+    state: 'enabledForReportingButNotEnforced',
+    conditions: {
+      users: {
+        includeUsers: ['None'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['All'],
+        excludeApplications: [],
+      },
+      clientAppTypes: [],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+      clientApplications: {
+        includeServicePrincipals: [],
+        excludeServicePrincipals: [],
+        includeAgentIdServicePrincipals: ['All'],
+      },
+      agentIdRiskLevels: ['high'],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['block'],
+    },
+    sessionControls: null,
+  },
 ];
 
 /** Display names for GUIDs referenced in sample policies. */

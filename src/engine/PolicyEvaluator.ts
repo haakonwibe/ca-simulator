@@ -13,6 +13,8 @@ import { RiskLevelMatcher } from './conditions/RiskLevelMatcher';
 import { DeviceFilterMatcher } from './conditions/DeviceFilterMatcher';
 import { AuthenticationFlowMatcher } from './conditions/AuthenticationFlowMatcher';
 import { InsiderRiskMatcher } from './conditions/InsiderRiskMatcher';
+import { ClientApplicationsMatcher } from './conditions/ClientApplicationsMatcher';
+import { AgentRiskMatcher } from './conditions/AgentRiskMatcher';
 import { isAuthStrengthSatisfied } from './authenticationStrength';
 import { evaluateGrantSatisfaction } from './grantSatisfaction';
 
@@ -36,6 +38,8 @@ export class PolicyEvaluator {
   private readonly deviceFilterMatcher = new DeviceFilterMatcher();
   private readonly authenticationFlowMatcher = new AuthenticationFlowMatcher();
   private readonly insiderRiskMatcher = new InsiderRiskMatcher();
+  private readonly clientApplicationsMatcher = new ClientApplicationsMatcher();
+  private readonly agentRiskMatcher = new AgentRiskMatcher();
 
   evaluate(policy: ConditionalAccessPolicy, context: SimulationContext): PolicyEvaluationResult {
     // Skip disabled policies early (Hard-Won Lesson #3)
@@ -53,11 +57,51 @@ export class PolicyEvaluator {
     const conditionResults: ConditionMatchResult[] = [];
     const conditions = policy.conditions;
 
-    // 1. Users (always present)
-    const userResult = this.safeEvaluate('users', () => this.userMatcher.evaluate(context, conditions.users));
-    conditionResults.push(userResult);
-    if (!userResult.matches) {
-      return this.buildResult(policy, false, conditionResults);
+    // 0. Identity-type gate (Entra Agent ID isolation rules):
+    //    - Agent-identity sign-ins match ONLY via agent targeting; the users
+    //      condition is skipped entirely.
+    //    - Policies targeting agent identities never apply to user or
+    //      agent-user sign-ins.
+    const identityType = context.identityType ?? 'user';
+    const hasAgentTargeting =
+      (conditions.clientApplications?.includeAgentIdServicePrincipals?.length ?? 0) > 0;
+
+    if (identityType === 'agentIdentity') {
+      if (!hasAgentTargeting) {
+        conditionResults.push({
+          conditionType: 'clientApplications',
+          matches: false,
+          reason: 'Policy does not target agent identities',
+          phase: 'inclusion',
+        });
+        return this.buildResult(policy, false, conditionResults);
+      }
+      const agentResult = this.safeEvaluate('clientApplications', () =>
+        this.clientApplicationsMatcher.evaluate(context, conditions.clientApplications!));
+      conditionResults.push(agentResult);
+      if (!agentResult.matches) {
+        return this.buildResult(policy, false, conditionResults);
+      }
+      // Users condition intentionally skipped for agent identities
+    } else {
+      if (hasAgentTargeting) {
+        conditionResults.push({
+          conditionType: 'clientApplications',
+          matches: false,
+          reason: identityType === 'agentUser'
+            ? 'Policy targets agent identities — it never applies to the agent\'s user account'
+            : 'Policy targets agent identities — it does not apply to user sign-ins',
+          phase: 'inclusion',
+        });
+        return this.buildResult(policy, false, conditionResults);
+      }
+
+      // 1. Users (always present)
+      const userResult = this.safeEvaluate('users', () => this.userMatcher.evaluate(context, conditions.users));
+      conditionResults.push(userResult);
+      if (!userResult.matches) {
+        return this.buildResult(policy, false, conditionResults);
+      }
     }
 
     // 2. Applications (always present)
@@ -125,6 +169,15 @@ export class PolicyEvaluator {
       const insiderRiskResult = this.safeEvaluate('insiderRisk', () => this.insiderRiskMatcher.evaluate(context, conditions.insiderRiskLevels!));
       conditionResults.push(insiderRiskResult);
       if (!insiderRiskResult.matches) {
+        return this.buildResult(policy, false, conditionResults);
+      }
+    }
+
+    // 10. Agent risk levels (optional — unconfigured = matches all)
+    if (conditions.agentIdRiskLevels?.length) {
+      const agentRiskResult = this.safeEvaluate('agentRisk', () => this.agentRiskMatcher.evaluate(context, conditions.agentIdRiskLevels!));
+      conditionResults.push(agentRiskResult);
+      if (!agentRiskResult.matches) {
         return this.buildResult(policy, false, conditionResults);
       }
     }

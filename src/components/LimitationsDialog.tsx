@@ -56,6 +56,30 @@ export function LimitationsDialog({
             </p>
           </Section>
 
+          <Section title="Agent identities">
+            <ul className="space-y-2 mt-1">
+              <LimitationItem>
+                <strong>Agent attribute filters</strong> — Policies scoping agents by custom
+                security attributes are displayed but the filter rule is not evaluated; matches
+                are flagged "filter not evaluated" in the trace.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Workload identities</strong> — Non-agent service principal targeting
+                (includeServicePrincipals) is not simulated.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Agent user scoping</strong> — Per Microsoft's documented behavior,
+                "All users" and group membership do not cover agent user accounts; the
+                simulator mirrors this.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Beta schema</strong> — Agent policy details come from the beta Graph
+                endpoint. If it is unavailable, policies load from v1.0 and agent targeting is
+                invisible (a notice is shown).
+              </LimitationItem>
+            </ul>
+          </Section>
+
           <Section title="Other notes">
             <ul className="space-y-2 mt-1">
               <LimitationItem>

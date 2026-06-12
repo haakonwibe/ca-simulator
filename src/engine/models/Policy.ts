@@ -27,6 +27,26 @@ export interface PolicyConditions {
   authenticationFlows?: AuthenticationFlowCondition;
   servicePrincipalRiskLevels?: RiskLevel[];
   insiderRiskLevels?: InsiderRiskLevel[];
+  /** Agent identity / workload identity targeting (beta Graph schema) */
+  clientApplications?: ClientApplicationsCondition;
+  /** Agent risk condition — Graph wire format is a comma-flagged string; normalized to an array */
+  agentIdRiskLevels?: RiskLevel[];
+}
+
+/**
+ * Special values in user lists: 'AllAgentIdUsers' targets agent user accounts
+ * (NOT covered by 'All' per documented Microsoft limitation). Special value in
+ * application lists: 'AllAgentIdResources' targets agent resources.
+ */
+export interface ClientApplicationsCondition {
+  includeServicePrincipals: string[];
+  excludeServicePrincipals: string[];
+  /** ['All'] or specific agent service principal ids */
+  includeAgentIdServicePrincipals?: string[];
+  excludeAgentIdServicePrincipals?: string[];
+  servicePrincipalFilter?: DeviceFilterCondition;
+  /** Custom-security-attribute filter — displayed but NOT evaluated (v0.6.6) */
+  agentIdServicePrincipalFilter?: DeviceFilterCondition;
 }
 
 export interface AuthenticationFlowCondition {
