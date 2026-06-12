@@ -11,12 +11,12 @@ interface EvaluationState {
   /** Context of the last evaluation — lets the sandbox compute a live-vs-sandbox comparison */
   lastContext: SimulationContext | null;
   selectedPolicyId: string | null;
-  activeView: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact';
+  activeView: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline';
 
   // Actions
   evaluate: (policies: ConditionalAccessPolicy[], context: SimulationContext) => void;
   setSelectedPolicyId: (id: string | null) => void;
-  setActiveView: (view: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact') => void;
+  setActiveView: (view: 'grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline') => void;
   clear: () => void;
 }
 

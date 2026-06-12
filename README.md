@@ -17,7 +17,8 @@ Microsoft's built-in What If tool evaluates one scenario at a time with no visua
 
 ## Features
 
-- **Five visualization modes** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal analysis)
+- **Six analysis views** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal analysis), Baseline (Microsoft template assessment)
+- **Baseline assessment** — 18 checks drawn from Microsoft's Conditional Access policy templates, judged by outcome: each check runs targeted scenarios through the engine and verifies the protection is actually guaranteed. Flags policies that are configured but stuck in report-only mode
 - **Policy sandbox** — toggle any policy between enabled, report-only, and disabled and see the simulated effect across every view before touching the tenant. The diff panel sweeps all 5,760 scenarios through both the live and sandboxed sets, showing posture delta, newly blocked/allowed scenarios, and affected user types
 - **Impact analysis** — "What if I disabled this policy?" Remove each enabled policy and re-evaluate all 5,760 scenario combinations. Policies classified as Critical/High/Medium/Low severity based on verdict changes, control loss, and fallback existence
 - **Weighted security posture score** — each scenario scored 0–10 based on enforced controls; see how your posture changes when a policy is removed
@@ -95,6 +96,8 @@ Every step produces a trace entry, giving full visibility into why each policy w
 **Impact** — Policy removal impact analysis. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations to measure the effect. Shows a weighted security posture score, affected user breakdown (red/green pills by user type), contextual fallback analysis identifying which other policies still cover the gap, and "other protection active" cards. Policies are classified as Critical, High, Medium, or Low severity.
 
 **Sandbox** — Not a view but a mode: the header switch puts the whole app into a hypothetical state. Toggle policy states on the Grid tiles or detail panel, and every view evaluates the sandboxed set — with a change-tracking bar, a sandbox-vs-live diff panel, and a verdict banner line showing what the live tenant does today whenever results differ.
+
+**Baseline** — Assessment against Microsoft's Conditional Access policy templates across Secure Foundation, Zero Trust, Remote Work, Protect Administrators, and Emerging Threats. Verdicts are outcome-based — checks run targeted scenarios through the engine and require the protection to be guaranteed, so scope holes and OR-grant loopholes are caught. Report-only policies that would satisfy a check are called out by name, and with sandbox mode active you can promote one and watch the check pass. License-gated checks (Entra ID P2, Purview) are labeled and filterable.
 
 ## Architecture
 

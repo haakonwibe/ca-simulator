@@ -11,7 +11,7 @@ import { COLORS, APP_VERSION } from '@/data/theme';
 
 export function AppLayout() {
   const activeView = useEvaluationStore((s) => s.activeView);
-  const showSidebar = activeView !== 'gaps' && activeView !== 'impact';
+  const showSidebar = activeView !== 'gaps' && activeView !== 'impact' && activeView !== 'baseline';
 
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const [diffOpen, setDiffOpen] = useState(false);

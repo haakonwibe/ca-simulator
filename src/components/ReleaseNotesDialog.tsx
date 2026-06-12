@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.0',
+    subtitle: 'Baseline Assessment',
+    features: [
+      {
+        heading: 'Baseline Tab',
+        body: "Assess your tenant against 18 checks drawn from Microsoft's Conditional Access policy templates — Secure Foundation, Zero Trust, Remote Work, Protect Administrators, and Emerging Threats. Each check reports Pass, Partial, Report-only, or Fail, with category filters and license indicators for P2 and Purview features.",
+      },
+      {
+        heading: 'Outcome-Based Verdicts',
+        body: 'Checks judge what your policies actually do, not what they look like. Each one runs targeted sign-in scenarios through the evaluation engine and verifies the expected protection is guaranteed — so a custom-built policy that blocks legacy authentication passes, while a template lookalike with a scope hole shows exactly which scenarios get through.',
+      },
+      {
+        heading: 'Report-Only Detection',
+        body: 'Policies deployed from templates start in report-only mode and are often never enabled. The assessment flags checks that would pass if an existing report-only policy were turned on, and names the policy.',
+      },
+      {
+        heading: 'Works with the Sandbox',
+        body: 'The assessment evaluates your sandboxed policy set when sandbox mode is active. Promote a report-only policy in the sandbox and watch the check flip to Pass — verify the fix before touching your tenant.',
+      },
+    ],
+  },
+  {
     version: 'v0.5.0',
     subtitle: 'Policy Sandbox',
     features: [

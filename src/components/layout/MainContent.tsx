@@ -1,6 +1,6 @@
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Button } from '@/components/ui/button';
-import { LayoutGrid, List, GitBranch, ShieldAlert, Zap } from 'lucide-react';
+import { LayoutGrid, List, GitBranch, ShieldAlert, Zap, ClipboardCheck } from 'lucide-react';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { ADMIN_CONSENT_ERROR } from '@/services/graphClient';
@@ -9,6 +9,7 @@ import { EvaluationMatrix } from '@/components/matrix/EvaluationMatrix';
 import { SankeyFunnel } from '@/components/sankey/SankeyFunnel';
 import { GapsView } from '@/components/GapsView';
 import { ImpactView } from '@/components/ImpactView';
+import { BaselineView } from '@/components/BaselineView';
 import { PolicyDetailPanel } from '@/components/PolicyDetailPanel';
 import { ResultsSummary } from '@/components/ResultsSummary';
 import { ConsentBanner } from '@/components/ConsentBanner';
@@ -27,7 +28,7 @@ export function MainContent() {
     );
   }
 
-  const isFullAreaView = activeView === 'gaps' || activeView === 'impact';
+  const isFullAreaView = activeView === 'gaps' || activeView === 'impact' || activeView === 'baseline';
 
   return (
     <div className="flex flex-1 flex-col overflow-hidden">
@@ -78,6 +79,15 @@ export function MainContent() {
           <Zap className="h-3.5 w-3.5" />
           Impact
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'baseline' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
+          onClick={() => setActiveView('baseline')}
+        >
+          <ClipboardCheck className="h-3.5 w-3.5" />
+          Baseline
+        </Button>
         <div className="ml-auto">
           <SandboxChip />
         </div>
@@ -88,6 +98,7 @@ export function MainContent() {
         <>
           {activeView === 'gaps' && <GapsView />}
           {activeView === 'impact' && <ImpactView />}
+          {activeView === 'baseline' && <BaselineView />}
         </>
       ) : (
         <>
