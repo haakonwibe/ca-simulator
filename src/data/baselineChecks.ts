@@ -114,7 +114,7 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
     categories: ['secureFoundation', 'zeroTrust', 'remoteWork'],
     license: 'P1',
     docsUrl: `${DOCS}/policy-all-users-security-info-registration`,
-    whyItMatters: 'Unprotected security info registration lets an attacker with a stolen password enroll their own MFA methods.',
+    whyItMatters: 'Unprotected security info registration lets an attacker with a stolen password enroll their own MFA methods. Pair it with a Temporary Access Pass or a trusted-location path: a user who has not registered any method yet cannot satisfy an MFA requirement to register their first one.',
     assessment: {
       // Members and admins only — Microsoft's template explicitly excludes
       // guest/external users from this protection (they register elsewhere)

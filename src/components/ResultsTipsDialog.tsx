@@ -27,6 +27,14 @@ const TIPS = [
     body: 'If any single enabled policy results in Block, the final verdict is Block — regardless of how many other policies grant access. This is by design in Conditional Access.',
   },
   {
+    heading: 'Entra joined does not satisfy "hybrid joined"',
+    body: 'The "Require Microsoft Entra hybrid joined device" grant control means hybrid specifically. A Microsoft Entra joined device — the modern cloud-only default — does not satisfy it, and neither does an Entra registered device. Set Device Join Type to Hybrid joined to see that control turn satisfied.',
+  },
+  {
+    heading: 'Passwordless is not the same as phishing-resistant',
+    body: 'Both drop the password, but only phishing-resistant methods are bound to the sign-in origin. Microsoft Authenticator phone sign-in is passwordless and still relayable by an attacker-in-the-middle, so it satisfies Passwordless MFA but not Phishing-resistant MFA. Passkeys, Windows Hello, and certificate-based authentication satisfy both.',
+  },
+  {
     heading: 'Gap Analysis sweeps all combinations',
     body: 'The Gaps tab tests every combination of platform, client app, location, and risk level. A finding doesn\'t mean you\'re vulnerable right now — it means a specific combination of conditions has no policy coverage.',
   },

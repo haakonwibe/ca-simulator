@@ -37,7 +37,10 @@ export function LimitationsDialog({
               <LimitationItem>
                 <strong>Authentication Strength</strong> — Built-in and custom strengths are
                 resolved at the tier level (MFA, Passwordless, Phishing-resistant). Individual
-                authentication methods (e.g. "user has a FIDO2 key") are not tracked.
+                authentication methods (e.g. "user has a FIDO2 key") are not tracked, so a
+                custom strength allowing one specific method is treated as its tier — any
+                sign-in at that tier reads as satisfying it, where Entra would require the
+                method itself. Built-in strengths are exact.
               </LimitationItem>
             </ul>
           </Section>

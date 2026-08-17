@@ -21,17 +21,22 @@ export const PHISHING_RESISTANT_METHODS: ReadonlySet<string> = new Set([
   'x509CertificateMultiFactor',
 ]);
 
-/** Methods that qualify as passwordless (no password component). */
+/**
+ * Methods that qualify as passwordless (middle tier).
+ *
+ * Mirrors the "Passwordless MFA strength" column of Microsoft's built-in
+ * strengths table exactly — being password-free is not sufficient on its own.
+ * Notably excluded, because Microsoft grades them MFA-only:
+ *   - temporaryAccessPass{OneTime,MultiUse} — MFA column only
+ *   - federated{SingleFactor,MultiFactor}   — MFA column only
+ *   - x509CertificateSingleFactor           — satisfies no strength at all
+ * https://learn.microsoft.com/entra/identity/authentication/concept-authentication-strengths
+ */
 export const PASSWORDLESS_METHODS: ReadonlySet<string> = new Set([
-  'windowsHelloForBusiness',
+  'windowsHelloForBusiness', // also covers the macOS platform credential
   'fido2',
   'x509CertificateMultiFactor',
-  'x509CertificateSingleFactor',
   'deviceBasedPush',
-  'temporaryAccessPassOneTime',
-  'temporaryAccessPassMultiUse',
-  'federatedSingleFactor',
-  'federatedMultiFactor',
 ]);
 
 /**

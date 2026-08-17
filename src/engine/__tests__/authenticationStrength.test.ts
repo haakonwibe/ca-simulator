@@ -91,9 +91,34 @@ describe('resolveCustomAuthStrengthTier', () => {
     expect(resolveCustomAuthStrengthTier(['fido2', 'deviceBasedPush'])).toBe(2);
   });
 
-  it('returns 2 for passwordless methods like TAP and federated', () => {
+  // Microsoft grades these MFA-only — they are password-free but do NOT
+  // appear in the built-in "Passwordless MFA strength" column. Tiering them
+  // at 2 would demand a passwordless-grade credential Entra never requires.
+  it('returns 1 for TAP-only strengths (MFA-grade, not passwordless)', () => {
+    expect(resolveCustomAuthStrengthTier(['temporaryAccessPassOneTime'])).toBe(1);
+    expect(resolveCustomAuthStrengthTier(['temporaryAccessPassMultiUse'])).toBe(1);
+  });
+
+  it('returns 1 for federated strengths (MFA-grade, not passwordless)', () => {
+    expect(resolveCustomAuthStrengthTier(['federatedMultiFactor'])).toBe(1);
+    expect(resolveCustomAuthStrengthTier(['federatedSingleFactor'])).toBe(1);
+  });
+
+  it('returns 1 for single-factor certificate (satisfies no built-in strength)', () => {
+    expect(resolveCustomAuthStrengthTier(['x509CertificateSingleFactor'])).toBe(1);
+  });
+
+  it('returns 1 when an MFA-grade method joins passwordless ones', () => {
+    // The weakest allowed combination sets the tier — a user holding only a
+    // TAP satisfies this strength, so it cannot demand passwordless.
     expect(resolveCustomAuthStrengthTier([
-      'temporaryAccessPassOneTime', 'federatedMultiFactor',
+      'fido2', 'temporaryAccessPassOneTime',
+    ])).toBe(1);
+  });
+
+  it('returns 2 for the exact built-in passwordless method set', () => {
+    expect(resolveCustomAuthStrengthTier([
+      'windowsHelloForBusiness', 'fido2', 'x509CertificateMultiFactor', 'deviceBasedPush',
     ])).toBe(2);
   });
 

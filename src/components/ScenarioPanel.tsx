@@ -100,25 +100,45 @@ const LOCATION_OPTIONS = [
   { value: 'untrusted', label: 'Untrusted' },
 ] as const;
 
-const DEVICE_OPTIONS = [
-  { value: 'any', label: 'Any' },
-  { value: 'compliant', label: 'Compliant (Intune MDM)' },
-  { value: 'domainJoined', label: 'Hybrid Azure AD Joined' },
-  { value: 'compliantAndHybrid', label: 'Compliant + Hybrid Joined' },
-  { value: 'unmanaged', label: 'Unmanaged' },
+// Compliance and join type are independent in Entra, so they get one control
+// each. A single select could only cover the space by hardcoding combinations,
+// which left "Any" and "Unmanaged" evaluating identically and made Entra joined
+// unreachable.
+const DEVICE_COMPLIANCE_OPTIONS = [
+  { value: 'any', label: 'Any', description: 'No compliance signal' },
+  { value: 'compliant', label: 'Compliant (Intune MDM)', description: 'Enrolled and passing policy' },
+  { value: 'nonCompliant', label: 'Non-compliant', description: 'Enrolled but failing policy' },
 ] as const;
 
+const DEVICE_JOIN_OPTIONS = [
+  { value: 'unregistered', label: 'Unregistered', description: 'Not known to Entra' },
+  { value: 'entraJoined', label: 'Microsoft Entra joined', description: 'Cloud-joined — the modern default' },
+  { value: 'hybrid', label: 'Hybrid joined', description: 'AD domain-joined, synced to Entra' },
+  { value: 'registered', label: 'Entra registered', description: 'Personal device, work account' },
+] as const;
+
+/** Picker value → the trustType the device filter grammar sees. */
+const JOIN_TRUST_TYPES: Record<string, 'azureADJoined' | 'hybridAzureADJoined' | 'azureADRegistered' | undefined> = {
+  unregistered: undefined,
+  entraJoined: 'azureADJoined',
+  hybrid: 'hybridAzureADJoined',
+  registered: 'azureADRegistered',
+};
+
+// Descriptions name the concrete methods — the tier names alone read as three
+// points on one line, when passwordless and phishing-resistant are separate
+// properties (no typed secret / bound to the sign-in origin).
 const AUTH_OPTIONS = [
-  { value: 'none', label: 'None' },
-  { value: 'mfa', label: 'MFA' },
-  { value: 'passwordlessMfa', label: 'Passwordless MFA' },
-  { value: 'phishingResistantMfa', label: 'Phishing-resistant MFA' },
+  { value: 'none', label: 'None', description: 'Password only' },
+  { value: 'mfa', label: 'MFA', description: 'Password + SMS, voice, push, or token' },
+  { value: 'passwordlessMfa', label: 'Passwordless MFA', description: 'No password — e.g. Authenticator phone sign-in' },
+  { value: 'phishingResistantMfa', label: 'Phishing-resistant MFA', description: 'Origin-bound — passkey, Windows Hello, CBA' },
 ] as const;
 
 const AUTH_FLOW_OPTIONS = [
-  { value: 'none', label: 'Normal sign-in' },
-  { value: 'deviceCodeFlow', label: 'Device Code Flow' },
-  { value: 'authenticationTransfer', label: 'Authentication Transfer' },
+  { value: 'none', label: 'Normal sign-in', description: 'Standard interactive sign-in' },
+  { value: 'deviceCodeFlow', label: 'Device Code Flow', description: 'Code entered on another device — TVs, CLI, IoT' },
+  { value: 'authenticationTransfer', label: 'Authentication Transfer', description: 'Signed-in session passed to a nearby device' },
 ] as const;
 
 const APP_PROTECTION_OPTIONS = [
@@ -129,9 +149,9 @@ const APP_PROTECTION_OPTIONS = [
 ] as const;
 
 const TARGET_MODE_OPTIONS = [
-  { value: 'resources', label: 'Resources (Cloud Apps)' },
-  { value: 'userActions', label: 'User Actions' },
-  { value: 'authContext', label: 'Authentication Context' },
+  { value: 'resources', label: 'Resources (Cloud Apps)', description: 'Apps and services the user signs in to' },
+  { value: 'userActions', label: 'User Actions', description: 'Registering security info or a device' },
+  { value: 'authContext', label: 'Authentication Context', description: 'Extra controls for tagged sites and labels' },
 ] as const;
 
 const USER_ACTION_OPTIONS = [
@@ -179,7 +199,8 @@ export function ScenarioPanel() {
   const [userRisk, setUserRisk] = useState<RiskLevel | 'none'>('none');
   const [insiderRisk, setInsiderRisk] = useState<InsiderRiskLevel | 'none'>('none');
   const [location, setLocation] = useState('any');
-  const [deviceState, setDeviceState] = useState('any');
+  const [deviceCompliance, setDeviceCompliance] = useState('any');
+  const [deviceJoin, setDeviceJoin] = useState('unregistered');
   const [authentication, setAuthentication] = useState<'none' | 'mfa' | 'passwordlessMfa' | 'phishingResistantMfa'>('none');
   const [authFlow, setAuthFlow] = useState<'none' | 'deviceCodeFlow' | 'authenticationTransfer'>('none');
   const [appProtection, setAppProtection] = useState<'none' | 'approvedApp' | 'managedApp' | 'both'>('none');
@@ -378,13 +399,8 @@ export function ScenarioPanel() {
       device: {
         platform: platform === 'any' ? undefined : (platform as DevicePlatform),
         isCompliant:
-          deviceState === 'compliant' || deviceState === 'compliantAndHybrid'
-            ? true
-            : undefined,
-        trustType:
-          deviceState === 'domainJoined' || deviceState === 'compliantAndHybrid'
-            ? 'hybridAzureADJoined'
-            : undefined,
+          deviceCompliance === 'any' ? undefined : deviceCompliance === 'compliant',
+        trustType: JOIN_TRUST_TYPES[deviceJoin],
       },
       location: {
         isTrustedLocation:
@@ -404,7 +420,7 @@ export function ScenarioPanel() {
       customAuthStrengthMap: authStrengthMap.size > 0 ? authStrengthMap : undefined,
       satisfiedControls: isAgentIdentity
         ? []
-        : deriveSatisfiedControls({ authentication, deviceState, appProtection, passwordChanged }),
+        : deriveSatisfiedControls({ authentication, deviceCompliance, deviceJoin, appProtection, passwordChanged }),
     };
 
     evaluate(policies, context);
@@ -706,9 +722,9 @@ export function ScenarioPanel() {
                   {selectedPersona.userType === 'member' ? 'Member' : 'Guest'}
                 </Badge>
               </div>
-              <div className="mt-1 flex gap-3 text-[10px] text-muted-foreground">
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                 <span>{selectedPersona.memberOfGroupIds.length} groups</span>
-                <span>{selectedPersona.directoryRoleIds.length} roles</span>
+                <PersonaRoles roleIds={selectedPersona.directoryRoleIds} displayNames={displayNames} />
               </div>
             </div>
           )}
@@ -725,7 +741,7 @@ export function ScenarioPanel() {
             </SelectTrigger>
             <SelectContent>
               {AUTH_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                <SelectItem key={opt.value} value={opt.value} className="text-xs" description={opt.description}>
                   {opt.label}
                 </SelectItem>
               ))}
@@ -743,7 +759,7 @@ export function ScenarioPanel() {
             </SelectTrigger>
             <SelectContent>
               {AUTH_FLOW_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                <SelectItem key={opt.value} value={opt.value} className="text-xs" description={opt.description}>
                   {opt.label}
                 </SelectItem>
               ))}
@@ -760,7 +776,7 @@ export function ScenarioPanel() {
             </SelectTrigger>
             <SelectContent>
               {TARGET_MODE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+                <SelectItem key={opt.value} value={opt.value} className="text-xs" description={opt.description}>
                   {opt.label}
                 </SelectItem>
               ))}
@@ -983,16 +999,45 @@ export function ScenarioPanel() {
           </Select>
         </div>
 
-        {/* Device State */}
+        {/* Device Compliance */}
         <div>
-          <SectionLabel icon={<Laptop className="h-3 w-3" />} label="Device State" />
-          <Select value={deviceState} onValueChange={(v) => { clearResults(); setDeviceState(v); }}>
+          <SectionLabel icon={<Laptop className="h-3 w-3" />} label="Device Compliance" />
+          <Select value={deviceCompliance} onValueChange={(v) => { clearResults(); setDeviceCompliance(v); }}>
             <SelectTrigger className="h-8 text-xs">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              {DEVICE_OPTIONS.map((opt) => (
-                <SelectItem key={opt.value} value={opt.value} className="text-xs">
+              {DEVICE_COMPLIANCE_OPTIONS.map((opt) => {
+                // Intune enrollment requires a device identity in Entra, so an
+                // unregistered device has no compliance state at all (null,
+                // not false). Offering one would model an impossible sign-in.
+                const disabled = deviceJoin === 'unregistered' && opt.value !== 'any';
+                return (
+                  <SelectItem
+                    key={opt.value}
+                    value={opt.value}
+                    className="text-xs"
+                    disabled={disabled}
+                    description={disabled ? 'Needs a registered device' : opt.description}
+                  >
+                    {opt.label}
+                  </SelectItem>
+                );
+              })}
+            </SelectContent>
+          </Select>
+        </div>
+
+        {/* Device Join Type */}
+        <div>
+          <SectionLabel icon={<Laptop className="h-3 w-3" />} label="Device Join Type" />
+          <Select value={deviceJoin} onValueChange={(v) => { clearResults(); setDeviceJoin(v); if (v === 'unregistered') setDeviceCompliance('any'); }}>
+            <SelectTrigger className="h-8 text-xs">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              {DEVICE_JOIN_OPTIONS.map((opt) => (
+                <SelectItem key={opt.value} value={opt.value} className="text-xs" description={opt.description}>
                   {opt.label}
                 </SelectItem>
               ))}
@@ -1033,6 +1078,34 @@ export function ScenarioPanel() {
 }
 
 // ── Small helper component ──────────────────────────────────────────
+
+/**
+ * Directory roles drive whether admin-scoped policies apply, so the persona
+ * card names them rather than showing a count. Falls back to the count when
+ * a live tenant returns role IDs the display-name map could not resolve.
+ */
+function PersonaRoles({
+  roleIds,
+  displayNames,
+}: {
+  roleIds: string[];
+  displayNames: Map<string, string>;
+}) {
+  if (roleIds.length === 0) {
+    return <span>No directory roles</span>;
+  }
+  const names = roleIds.map((id) => displayNames.get(id)).filter((n): n is string => Boolean(n));
+  if (names.length === 0) {
+    return <span>{roleIds.length} roles</span>;
+  }
+  const unresolved = roleIds.length - names.length;
+  return (
+    <span style={{ color: COLORS.warning }}>
+      {names.join(', ')}
+      {unresolved > 0 && ` +${unresolved} more`}
+    </span>
+  );
+}
 
 function SectionLabel({ icon, label }: { icon: React.ReactNode; label: string }) {
   return (

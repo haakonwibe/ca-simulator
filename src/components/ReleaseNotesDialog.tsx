@@ -17,6 +17,28 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.10',
+    subtitle: 'Scenario Clarity',
+    features: [
+      {
+        heading: 'Device State, Split in Two',
+        body: 'Device compliance and join type are now separate controls, matching the way Entra models them. You can simulate a Microsoft Entra joined workstation, an Entra registered BYOD phone, or an enrolled device that is failing policy — combinations a single picker could not express. Impossible states are ruled out too: an unregistered device has no compliance status to set.',
+      },
+      {
+        heading: 'Every Scenario Option Explained',
+        body: 'Authentication, Authentication Flow, Target Resource, and both device controls now describe each option in place. Passwordless and phishing-resistant MFA name the methods that qualify, so the distinction is visible at the moment you choose rather than something to remember.',
+      },
+      {
+        heading: 'Authentication Strength Precision',
+        body: "Custom authentication strengths now resolve against Microsoft's built-in strength definitions exactly. Strengths built from Temporary Access Pass or federated methods grade as multifactor rather than passwordless, so a policy requiring one is satisfied by the same sign-ins Entra would accept.",
+      },
+      {
+        heading: 'Baseline Guidance',
+        body: 'The security info registration check now explains what it takes to roll out safely: a user with no method registered yet cannot satisfy an MFA requirement to register their first one, so a Temporary Access Pass or trusted-location path needs to exist alongside it. Newly relevant as Entra begins allowing passkeys as a first method.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.8',
     subtitle: 'AI Agents Baseline',
     features: [

@@ -5,7 +5,8 @@ import type { SatisfiedControl } from '@/engine/models/SimulationContext';
 
 export function deriveSatisfiedControls(scenario: {
   authentication: string;
-  deviceState: string;
+  deviceCompliance: string;
+  deviceJoin: string;
   appProtection: string;
   passwordChanged: boolean;
 }): SatisfiedControl[] {
@@ -17,10 +18,12 @@ export function deriveSatisfiedControls(scenario: {
   }
 
   // Device State
-  if (scenario.deviceState === 'compliant' || scenario.deviceState === 'compliantAndHybrid') {
+  if (scenario.deviceCompliance === 'compliant') {
     controls.push('compliantDevice');
   }
-  if (scenario.deviceState === 'domainJoined' || scenario.deviceState === 'compliantAndHybrid') {
+  // "Require Microsoft Entra hybrid joined device" is satisfied by hybrid join
+  // ONLY — Entra joined and Entra registered do not satisfy it.
+  if (scenario.deviceJoin === 'hybrid') {
     controls.push('domainJoinedDevice');
   }
 

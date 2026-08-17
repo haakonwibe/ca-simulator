@@ -13,7 +13,7 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 
 ## Why
 
-Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 500+ unit tests — and adds four visualization modes, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
+Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 660 unit tests — and adds six analysis views, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
 
 ## Features
 
@@ -29,11 +29,12 @@ Microsoft's built-in What If tool evaluates one scenario at a time with no visua
 - **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
 - **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow, ClientApplications (agents), AgentRisk
 - **Full tenant app discovery** — application dropdown shows all enterprise applications and app registrations from your tenant, not just apps referenced in policies
-- **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) based on their allowed combinations
+- **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) from their allowed combinations, graded against Microsoft's published built-in strength definitions rather than by whether a method involves a password — Temporary Access Pass and federated methods are password-free but grade as multifactor
+- **Independent device modelling** — device compliance and join type are separate scenario controls, covering Microsoft Entra joined, hybrid joined, Entra registered, and unregistered devices, plus enrolled-but-non-compliant. Join type drives `device.trustType` in the device filter grammar, and impossible states (compliance on an unregistered device) are ruled out
 - **Target resource modes** — simulate against cloud apps, User Actions (security info registration, device registration), or Authentication Contexts (C1–C3)
 - **Session controls in verdict** — aggregated session controls displayed with source policy links, including token protection (secureSignInSession)
 - **Full evaluation trace** — see exactly which condition knocked out each policy
-- **Sample mode** — 19 demo policies and 5 personas covering every engine feature, no Azure tenant required
+- **Sample mode** — 22 demo policies and 5 personas covering every engine feature, no Azure tenant required
 - **Live tenant connection** — MSAL + Microsoft Graph API with graceful admin consent handling
 
 ## Quick Start
@@ -107,7 +108,7 @@ Every step produces a trace entry, giving full visibility into why each policy w
 
 ```
 Engine Layer       Pure TypeScript, zero dependencies, fully testable in isolation
-                   9 condition matchers, 4-phase evaluation pipeline, 400+ unit tests
+                   11 condition matchers, identity-type gate, 4-phase pipeline, 660 unit tests
 
 Data Layer         MSAL authentication, Graph API policy fetch + pagination
                    Batch GUID resolution, named location lookup, persona search
@@ -126,7 +127,7 @@ The engine is a standalone TypeScript module with no knowledge of React, the DOM
 
 ```bash
 npm run dev          # Vite dev server with HMR
-npm test             # Run all 400+ engine tests
+npm test             # Run all 660 engine tests
 npm run test:watch   # Watch mode
 npm run build        # Production build
 ```
@@ -137,7 +138,7 @@ Run a single test file:
 npx vitest run src/engine/__tests__/conditions/UserConditionMatcher.test.ts
 ```
 
-The engine is tested independently of the UI. Each of the 9 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, gap analysis, and impact analysis.
+The engine is tested independently of the UI. Each of the 11 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, gap analysis, and impact analysis.
 
 The `/privacy` and `/terms` routes rely on Vercel's clean URL rewrites. Locally, use `/privacy/index.html` and `/terms/index.html` instead.
 

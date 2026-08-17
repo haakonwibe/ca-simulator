@@ -634,6 +634,72 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
     },
     sessionControls: null,
   },
+
+  // 21. Require MFA on devices that are not Entra joined (device filter)
+  {
+    id: 'ca-policy-021-mfa-non-entra-joined',
+    displayName: 'CA021: Require MFA on devices that are not Entra joined',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: ['break-glass-admin'],
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        // Deliberately an app outside SWEEP_APPS so this policy does not enter
+        // the gap/impact sweeps — sweep contexts carry no trustType, which
+        // would make the negative rule below match every scenario.
+        includeApplications: ['00000009-0000-0000-c000-000000000000'], // Power BI Service
+        excludeApplications: [],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+      // Negative operator: an unregistered device has no trustType at all, and
+      // Entra treats a missing property as matching a negative rule.
+      devices: { mode: 'include', rule: 'device.trustType -ne "AzureAD"' },
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['mfa'],
+    },
+    sessionControls: null,
+  },
+
+  // 22. Require hybrid joined device for the on-premises line-of-business app
+  {
+    id: 'ca-policy-022-hybrid-join-lob',
+    displayName: 'CA022: Require hybrid joined device — line-of-business app',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: ['break-glass-admin'],
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: ['499b84ac-1321-427f-aa17-267ca6975798'], // Azure DevOps
+        excludeApplications: [],
+      },
+      clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      // Satisfied by hybrid join ONLY — Entra joined and Entra registered
+      // do not satisfy "Require Microsoft Entra hybrid joined device".
+      operator: 'OR',
+      builtInControls: ['domainJoinedDevice'],
+    },
+    sessionControls: null,
+  },
 ];
 
 /** Display names for GUIDs referenced in sample policies. */
