@@ -17,6 +17,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Copy, Download, Check, ShieldAlert } from 'lucide-react';
+import { trackEvent } from '@/lib/analytics';
 
 type ExportTab = 'summary' | 'powershell' | 'json';
 
@@ -69,12 +70,14 @@ export function ExportChangesDialog({
   const hasCreations = plan.creations.length > 0;
 
   const handleCopy = async () => {
+    trackEvent({ name: 'export', props: { format: activeTab, action: 'copy' } });
     await navigator.clipboard.writeText(activeContent);
     setCopied(true);
     setTimeout(() => setCopied(false), 1200);
   };
 
   const handleDownload = () => {
+    trackEvent({ name: 'export', props: { format: activeTab, action: 'download' } });
     const blob = new Blob([activeContent], { type: activeMeta.mime });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');

@@ -13,17 +13,45 @@ import type { ConditionalAccessPolicy, ClientAppType, DevicePlatform, RiskLevel,
 import type { SimulationContext, UserContext } from '@/engine/models/SimulationContext';
 import type { CAEngineResult } from '@/engine/models/EvaluationResult';
 import { applySandboxOverrides, type SandboxOverrides } from './sandbox';
+import { classifyPersona } from './gapPersonas';
 import { SWEEP_APPS, SWEEP_PLATFORMS, SWEEP_CLIENT_APPS, SWEEP_USERS, APP_DISPLAY_NAMES } from './sweepDimensions';
 import {
   BASELINE_CHECKS,
   type BaselineCheck,
   type BaselineExpectation,
   type BaselineCategory,
+  type BaselinePersona,
 } from '@/data/baselineChecks';
 
 // ── Types ───────────────────────────────────────────────────────────
 
 export type BaselineStatus = 'pass' | 'reportOnly' | 'partial' | 'fail';
+
+/**
+ * A real tenant account to assess alongside the synthetic personas.
+ * `isException` marks break-glass / automation accounts: still evaluated, never
+ * counted against a check.
+ */
+export interface BaselinePersonaInput {
+  user: UserContext;
+  label: string;
+  isException: boolean;
+}
+
+/** Per-account tally, so a synthetic pass and a real failure are visible side by side. */
+export interface BaselinePersonaResult {
+  label: string;
+  kind: 'synthetic' | 'real';
+  passed: number;
+  total: number;
+}
+
+export interface BaselineExceptionResult {
+  label: string;
+  passed: number;
+  total: number;
+  failingExamples: string[];
+}
 
 export interface BaselineCheckResult {
   check: BaselineCheck;
@@ -36,6 +64,10 @@ export interface BaselineCheckResult {
   satisfyingPolicies: string[];
   /** Report-only policies whose promotion would make the check pass (capped) */
   promotablePolicies: string[];
+  /** Per-account breakdown of the counted scenarios (synthetic first, then real) */
+  personaResults: BaselinePersonaResult[];
+  /** Break-glass / service accounts — reported, excluded from the arithmetic */
+  exceptionResults: BaselineExceptionResult[];
 }
 
 export interface BaselineAssessmentResult {
@@ -52,6 +84,10 @@ const POLICY_CAP = 5;
 interface BaselineScenario {
   context: SimulationContext;
   description: string;
+  personaLabel: string;
+  personaKind: 'synthetic' | 'real';
+  /** Excluded from the pass arithmetic; reported on its own */
+  isException: boolean;
 }
 
 const CLIENT_LABELS: Record<ClientAppType, string> = {
@@ -115,6 +151,9 @@ function generateAgentScenarios(check: BaselineCheck): BaselineScenario[] {
             `${location} location`,
             ...(agentRisk !== 'none' ? [`${agentRisk} agent risk`] : []),
           ].join(', '),
+          personaLabel: label,
+          personaKind: 'synthetic',
+          isException: false,
         });
       }
     }
@@ -122,7 +161,40 @@ function generateAgentScenarios(check: BaselineCheck): BaselineScenario[] {
   return scenarios;
 }
 
-function generateScenarios(check: BaselineCheck): BaselineScenario[] {
+interface PersonaSweepEntry {
+  user: UserContext;
+  label: string;
+  kind: 'synthetic' | 'real';
+  isException: boolean;
+}
+
+/**
+ * Who stands in for a persona class. The synthetic persona always sweeps — it is
+ * what answers "does a policy of this shape exist at all?" — and mapped real
+ * accounts of the same class sweep alongside it. Their disagreement is the finding:
+ * a synthetic pass beside a real failure means the policy exists but excludes the
+ * account, which neither run alone would say.
+ */
+function personaSweepEntries(
+  persona: BaselinePersona,
+  personas?: BaselinePersonaInput[],
+): PersonaSweepEntry[] {
+  const synthetic = SWEEP_USERS[persona];
+  const entries: PersonaSweepEntry[] = [
+    { user: synthetic, label: synthetic.displayName, kind: 'synthetic', isException: false },
+  ];
+  for (const p of personas ?? []) {
+    if (classifyPersona(p.user) === persona) {
+      entries.push({ user: p.user, label: p.label, kind: 'real', isException: p.isException });
+    }
+  }
+  return entries;
+}
+
+function generateScenarios(
+  check: BaselineCheck,
+  personas?: BaselinePersonaInput[],
+): BaselineScenario[] {
   const spec = check.assessment;
   if (spec.identity) return generateAgentScenarios(check);
   const scenarios: BaselineScenario[] = [];
@@ -143,34 +215,39 @@ function generateScenarios(check: BaselineCheck): BaselineScenario[] {
   const insiderRisks = spec.insiderRiskLevels ?? ['none'];
 
   for (const persona of spec.personas) {
-    const user: UserContext = SWEEP_USERS[persona];
-    for (const target of targets) {
-      for (const platform of platforms) {
-        for (const clientApp of clientApps) {
-          for (const location of locations) {
-            for (const signInRisk of signInRisks) {
-              for (const userRisk of userRisks) {
-                for (const insiderRisk of insiderRisks) {
-                  scenarios.push({
-                    context: {
-                      user,
-                      application: target.userAction
-                        ? { appId: '', displayName: target.displayName, userAction: target.userAction }
-                        : { appId: target.appId, displayName: target.displayName },
-                      device: { platform },
-                      location: { isTrustedLocation: location === 'trusted' },
-                      risk: {
-                        signInRiskLevel: signInRisk as RiskLevel | 'none',
-                        userRiskLevel: userRisk as RiskLevel | 'none',
-                        insiderRiskLevel: insiderRisk as InsiderRiskLevel | 'none',
+    for (const entry of personaSweepEntries(persona, personas)) {
+      const user: UserContext = entry.user;
+      for (const target of targets) {
+        for (const platform of platforms) {
+          for (const clientApp of clientApps) {
+            for (const location of locations) {
+              for (const signInRisk of signInRisks) {
+                for (const userRisk of userRisks) {
+                  for (const insiderRisk of insiderRisks) {
+                    scenarios.push({
+                      context: {
+                        user,
+                        application: target.userAction
+                          ? { appId: '', displayName: target.displayName, userAction: target.userAction }
+                          : { appId: target.appId, displayName: target.displayName },
+                        device: { platform },
+                        location: { isTrustedLocation: location === 'trusted' },
+                        risk: {
+                          signInRiskLevel: signInRisk as RiskLevel | 'none',
+                          userRiskLevel: userRisk as RiskLevel | 'none',
+                          insiderRiskLevel: insiderRisk as InsiderRiskLevel | 'none',
+                        },
+                        clientAppType: clientApp,
+                        authenticationFlow: 'none',
+                        authenticationStrengthLevel: 0,
+                        satisfiedControls: [],
                       },
-                      clientAppType: clientApp,
-                      authenticationFlow: 'none',
-                      authenticationStrengthLevel: 0,
-                      satisfiedControls: [],
-                    },
-                    description: describeScenario(user, target.displayName, platform, clientApp, location, signInRisk, userRisk, insiderRisk),
-                  });
+                      description: describeScenario(entry.label, target.displayName, platform, clientApp, location, signInRisk, userRisk, insiderRisk),
+                      personaLabel: entry.label,
+                      personaKind: entry.kind,
+                      isException: entry.isException,
+                    });
+                  }
                 }
               }
             }
@@ -184,7 +261,7 @@ function generateScenarios(check: BaselineCheck): BaselineScenario[] {
 }
 
 function describeScenario(
-  user: UserContext,
+  personaLabel: string,
   targetName: string,
   platform: DevicePlatform | undefined,
   clientApp: ClientAppType,
@@ -194,7 +271,7 @@ function describeScenario(
   insiderRisk: string,
 ): string {
   const parts = [
-    `${user.displayName} → ${targetName}`,
+    `${personaLabel} → ${targetName}`,
     platform ?? 'unknown platform',
     CLIENT_LABELS[clientApp],
     `${location} location`,
@@ -315,6 +392,7 @@ function pushCapped(list: string[], value: string, cap: number): void {
 export function assessBaseline(
   policies: ConditionalAccessPolicy[],
   customAuthStrengthMap?: ReadonlyMap<string, number>,
+  personas?: BaselinePersonaInput[],
 ): BaselineAssessmentResult {
   const engine = new CAEngine();
 
@@ -332,13 +410,16 @@ export function assessBaseline(
   const checks: BaselineCheckResult[] = [];
 
   for (const check of BASELINE_CHECKS) {
-    const scenarios = generateScenarios(check);
+    const scenarios = generateScenarios(check, personas);
     const expect = check.assessment.expect;
 
     let passed = 0;
+    let countedTotal = 0;
     const failingExamples: string[] = [];
     const failingIndices: number[] = [];
     const satisfyingPolicies: string[] = [];
+    const personaTally = new Map<string, BaselinePersonaResult>();
+    const exceptionTally = new Map<string, BaselineExceptionResult>();
 
     const withContext = (context: SimulationContext) => {
       if (customAuthStrengthMap && customAuthStrengthMap.size > 0) {
@@ -350,20 +431,41 @@ export function assessBaseline(
     scenarios.forEach((scenario, i) => {
       const result = engine.evaluate(policies, withContext(scenario.context));
       const satisfier = findSatisfyingPolicy(result, expect, customAuthStrengthMap);
+
+      // Break-glass and automation accounts are meant to sit outside policy.
+      // Evaluate and report them, but keep them out of the arithmetic entirely —
+      // otherwise every admin check parks on red for a deliberate exclusion.
+      if (scenario.isException) {
+        const tally = exceptionTally.get(scenario.personaLabel)
+          ?? { label: scenario.personaLabel, passed: 0, total: 0, failingExamples: [] };
+        tally.total++;
+        if (satisfier) tally.passed++;
+        else pushCapped(tally.failingExamples, scenario.description, EXAMPLE_CAP);
+        exceptionTally.set(scenario.personaLabel, tally);
+        return;
+      }
+
+      const tally = personaTally.get(scenario.personaLabel)
+        ?? { label: scenario.personaLabel, kind: scenario.personaKind, passed: 0, total: 0 };
+      tally.total++;
+      countedTotal++;
+
       if (satisfier) {
         passed++;
+        tally.passed++;
         pushCapped(satisfyingPolicies, satisfier, POLICY_CAP);
       } else {
         failingIndices.push(i);
         pushCapped(failingExamples, scenario.description, EXAMPLE_CAP);
       }
+      personaTally.set(scenario.personaLabel, tally);
     });
 
     // Report-only detection: would promoting report-only policies fix it?
     let status: BaselineStatus;
     const promotablePolicies: string[] = [];
 
-    if (passed === scenarios.length) {
+    if (passed === countedTotal) {
       status = 'pass';
     } else {
       let promotedFixesAll = false;
@@ -397,10 +499,15 @@ export function assessBaseline(
       check,
       status,
       scenariosPassed: passed,
-      scenariosTotal: scenarios.length,
+      scenariosTotal: countedTotal,
       failingExamples,
       satisfyingPolicies,
       promotablePolicies,
+      // Synthetic first, so a real account's disagreement reads against a baseline
+      personaResults: [...personaTally.values()].sort((a, b) =>
+        a.kind === b.kind ? 0 : a.kind === 'synthetic' ? -1 : 1,
+      ),
+      exceptionResults: [...exceptionTally.values()],
     });
   }
 

@@ -3,6 +3,7 @@
 import { useState, useMemo, useRef, useCallback, useEffect } from 'react';
 import { useAuthStore } from '@/stores/useAuthStore';
 import { ADMIN_CONSENT_ERROR } from '@/services/graphClient';
+import { type EventTrigger } from '@/lib/analytics';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { usePersonaStore } from '@/stores/usePersonaStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
@@ -260,7 +261,7 @@ export function ScenarioPanel() {
         clientAppType: 'browser',
         satisfiedControls: [],
       };
-      useEvaluationStore.getState().evaluate(policies, context);
+      useEvaluationStore.getState().evaluate(policies, context, 'auto');
     }
   };
 
@@ -303,7 +304,7 @@ export function ScenarioPanel() {
 
   // ── Keyboard shortcut (Fix 4) ────────────────────────────────────
 
-  const handleEvaluateRef = useRef<() => void>(() => {});
+  const handleEvaluateRef = useRef<(trigger: EventTrigger) => void>(() => {});
   const canEvaluateRef = useRef(false);
 
   // Refs are updated below after handleEvaluate is defined
@@ -312,7 +313,7 @@ export function ScenarioPanel() {
     const handler = (e: KeyboardEvent) => {
       if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
         e.preventDefault();
-        if (canEvaluateRef.current) handleEvaluateRef.current();
+        if (canEvaluateRef.current) handleEvaluateRef.current('manual'); // Ctrl/Cmd+Enter
       }
     };
     document.addEventListener('keydown', handler);
@@ -354,7 +355,7 @@ export function ScenarioPanel() {
   const canEvaluate =
     policies.length > 0 && (identityType === 'agentIdentity' || selectedPersona !== null);
 
-  const handleEvaluate = () => {
+  const handleEvaluate = (trigger: EventTrigger) => {
     const isAgentIdentity = identityType === 'agentIdentity';
     if (!isAgentIdentity && !selectedPersona) return;
 
@@ -423,7 +424,7 @@ export function ScenarioPanel() {
         : deriveSatisfiedControls({ authentication, deviceCompliance, deviceJoin, appProtection, passwordChanged }),
     };
 
-    evaluate(policies, context);
+    evaluate(policies, context, trigger);
 
     // Button feedback flash (Fix 5) — dedupe rapid clicks, clean up on unmount
     setJustEvaluated(true);
@@ -443,7 +444,7 @@ export function ScenarioPanel() {
   // avoid depending on it (each evaluate() produces a new result object).
   useEffect(() => {
     if (useEvaluationStore.getState().result && canEvaluateRef.current) {
-      handleEvaluateRef.current();
+      handleEvaluateRef.current('auto'); // policies changed underneath, not a user action
     }
   }, [policies]);
 
@@ -1052,7 +1053,7 @@ export function ScenarioPanel() {
         <Button
           className="w-full gap-2"
           disabled={!canEvaluate && !justEvaluated}
-          onClick={handleEvaluate}
+          onClick={() => handleEvaluate('manual')}
           style={justEvaluated ? { borderColor: COLORS.granted } : undefined}
         >
           {justEvaluated ? (

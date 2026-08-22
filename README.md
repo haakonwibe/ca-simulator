@@ -1,73 +1,53 @@
 # CA Simulator
 
-A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in scenarios against real or sample CA policies, see exactly why each policy matched or didn't, and find coverage gaps before attackers do.
+A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in scenarios — including Entra Agent ID agent identities — against real or sample CA policies, experiment safely in a sandbox, assess against Microsoft's baseline recommendations, and export deployment-ready change plans.
 
 <p align="center">
-  <img src="docs/screenshots/grid-view-v03.png" width="49%" alt="Grid View" />
-  <img src="docs/screenshots/matrix-view-v03.png" width="49%" alt="Matrix View" />
+  <img src="docs/screenshots/grid-view.png" width="32%" alt="Grid View" />
+  <img src="docs/screenshots/matrix-view.png" width="32%" alt="Matrix View" />
+  <img src="docs/screenshots/sankey-view.png" width="32%" alt="Sankey Flow View" />
 </p>
-<p align="center">
-  <img src="docs/screenshots/sankey-view-v03.png" width="49%" alt="Sankey Flow View" />
-  <img src="docs/screenshots/gaps-view-v03.png" width="49%" alt="Gaps View" />
-</p>
-
-## Why
-
-Microsoft's built-in What If tool evaluates one scenario at a time with no visualization of the decision path. CA Simulator runs the same evaluation logic — verified by 660 unit tests — and adds six analysis views, full condition-level tracing, and automated gap analysis that sweeps hundreds of scenario combinations to find unprotected paths.
 
 ## Features
 
-- **Six analysis views** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal analysis), Baseline (Microsoft template assessment)
-- **Baseline assessment** — 21 checks drawn from Microsoft's Conditional Access policy templates and recommendations, including an AI Agents category (block high-risk agents, deny-by-default agent approval, risky agent user accounts), judged by outcome: each check runs targeted scenarios through the engine and verifies the protection is actually guaranteed. Flags policies that are configured but stuck in report-only mode
-- **Remediation bridge** — failing baseline checks get a Fix in Sandbox button that drafts the Microsoft template policy and re-assesses instantly. Export the whole sandbox as a deployment package: a Markdown change summary with checklist, a Microsoft Graph PowerShell script, and Graph-ready policy JSON — generated locally, with new policies defaulting to a non-enforcing state. The app itself never writes to your tenant
-- **Policy sandbox** — toggle any policy between enabled, report-only, and disabled, and edit policy scoping: remove any included or excluded user, group, role, or app, and add users and applications. Every view reflects the hypothetical state before you touch the tenant. The diff panel sweeps all 5,760 scenarios through both the live and sandboxed sets, showing posture delta, newly blocked/allowed scenarios, affected user types, and per-field scoping changes
-- **Impact analysis** — "What if I disabled this policy?" Remove each enabled policy and re-evaluate all 5,760 scenario combinations. Policies classified as Critical/High/Medium/Low severity based on verdict changes, control loss, and fallback existence
-- **Weighted security posture score** — each scenario scored 0–10 based on enforced controls; see how your posture changes when a policy is removed
-- **Contextual fallback analysis** — when disabling a policy creates a gap, see which other policies still provide protection, what remains, and what is lost
+- **Six analysis views** — Grid (tile overview), Matrix (diagnostic heatmap), Flow (Sankey funnel), Gaps (coverage analysis), Impact (policy removal assessment), and Baseline (Microsoft template assessment)
+- **Policy sandbox** — toggle any policy On/Report-only/Off, edit scoping (users, groups, roles, apps, agent identities), and draft policies from Microsoft templates; every view evaluates the hypothetical state, with a sandbox-vs-live diff across the full scenario sweep
+- **Baseline assessment** — 21 outcome-based checks against Microsoft's CA templates and recommendations, including an AI Agents category, with one-click Fix-in-Sandbox template drafts
+- **Change plan export** — the entire sandbox state as a Markdown summary, Microsoft Graph PowerShell script, and Graph-ready policy JSON, generated locally; the app never writes to the tenant
+- **Agent identity support** — simulate all three Entra Agent ID patterns (agent identities, agent user accounts, users accessing agent resources) with the documented isolation semantics; agent policies load with real targeting via the Graph beta endpoint and carry dedicated agent scenario grids through the diff and impact analysis
+- **Impact analysis** — "What if I disabled this policy?" for every enabled policy, with weighted security posture scoring, contextual fallback detection, affected user breakdown, and agent-aware severity
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
-- **Agent identity support** — simulate the three Entra Agent ID sign-in patterns (agent identities, agent user accounts, humans accessing agent resources) with the documented isolation semantics: agent policies never leak onto user sign-ins, and "All users" doesn't cover agent accounts. Agent policies load with their real targeting via the Graph beta endpoint (v1.0 omits it), get their own policy category, edit their agent lists in the sandbox, and carry dedicated agent scenario grids through the sandbox diff and impact analysis
-- **Deterministic evaluation engine** — pure TypeScript, zero browser dependencies, matching Microsoft's What If tool
-- **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, InsiderRisk, DeviceFilter, AuthenticationFlow, ClientApplications (agents), AgentRisk
-- **Full tenant app discovery** — application dropdown shows all enterprise applications and app registrations from your tenant, not just apps referenced in policies
-- **Authentication strength hierarchy** — built-in and custom strengths resolved with hierarchy-aware matching. Custom strengths are classified into tiers (MFA, Passwordless, Phishing-resistant) from their allowed combinations, graded against Microsoft's published built-in strength definitions rather than by whether a method involves a password — Temporary Access Pass and federated methods are password-free but grade as multifactor
-- **Independent device modelling** — device compliance and join type are separate scenario controls, covering Microsoft Entra joined, hybrid joined, Entra registered, and unregistered devices, plus enrolled-but-non-compliant. Join type drives `device.trustType` in the device filter grammar, and impossible states (compliance on an unregistered device) are ruled out
-- **Target resource modes** — simulate against cloud apps, User Actions (security info registration, device registration), or Authentication Contexts (C1–C3)
-- **Session controls in verdict** — aggregated session controls displayed with source policy links, including token protection (secureSignInSession)
-- **Full evaluation trace** — see exactly which condition knocked out each policy
-- **Sample mode** — 22 demo policies and 5 personas covering every engine feature, no Azure tenant required
-- **Live tenant connection** — MSAL + Microsoft Graph API with graceful admin consent handling
+- **Tenant app discovery** — Application dropdown shows all enterprise apps and app registrations from your tenant, not just policy-referenced apps
+- **Precise scenario modelling** — device compliance and join type as independent controls (Entra joined, hybrid joined, registered, unregistered), authentication strength tiered against Microsoft's built-in strength definitions, and every scenario option described in place
+- **Deterministic engine** matching Microsoft's What If tool — 701 unit tests verify accuracy
+- **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow, InsiderRisk, ClientApplications (agents), AgentRisk
+- **Sample mode** for instant demo — 22 policies and 5 personas, no Azure tenant required
+- **Live tenant connection** via MSAL + Microsoft Graph API
+- **Graceful permission handling** — friendly admin consent banner when tenant permissions are missing
+- **Privacy by construction** — your tenant data never leaves the browser; anonymous usage events come from a fixed, published allowlist that cannot carry policy names, identifiers, or results, and can be switched off in-app or via Do Not Track
+- **Pure TypeScript engine** with zero browser dependencies, fully testable in isolation
 
 ## Quick Start
 
 ```bash
-git clone https://github.com/haakonwibe/ca-simulator.git
-cd ca-simulator
+git clone https://github.com/haakonwibe/conditional-access-simulator.git
+cd conditional-access-simulator
 npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and click **Use Sample Data** to explore immediately — no Azure tenant required.
-
-### Docker
-
-Alternatively, run the application in a Docker container:
-
-```bash
-docker-compose up -d
-```
-
-Open `http://localhost:5173` and click **Use Sample Data** to explore.
+Open `http://localhost:5173` and click **Use Sample Data** to explore with 22 demo policies and 5 personas — no Azure tenant required.
 
 ## Live Tenant Connection
 
-To evaluate your own tenant's policies:
+To connect to your own Microsoft Entra ID tenant:
 
 1. Create a **Single-page application** registration in [Microsoft Entra ID](https://entra.microsoft.com/#view/Microsoft_AAD_RegisteredApps/ApplicationsListBlade)
 2. Add redirect URI: `http://localhost:5173`
 3. Set supported account types to **Accounts in any organizational directory** (multi-tenant)
 4. Grant **delegated** API permissions:
-   - `Policy.Read.All` — read CA policies, named locations, and authentication strengths
-   - `Directory.Read.All` — resolve users, groups, roles, and applications (covers user search, transitive membership, and app discovery)
+   - `Policy.Read.All` — read CA policies, named locations, authentication strengths
+   - `Directory.Read.All` — resolve users, groups, roles, and applications (also covers user search and membership resolution)
 5. Copy `.env.example` to `.env` and add your client ID:
    ```bash
    cp .env.example .env
@@ -75,76 +55,60 @@ To evaluate your own tenant's policies:
    ```
 6. Run `npm run dev` and click **Sign In**
 
-## How It Works
-
-The evaluation engine processes each sign-in scenario through a 4-phase pipeline:
-
-1. **Signal Collection** — capture the simulation context (user, app, device, platform, location, risk levels, insider risk, client app type, authentication strength level, custom auth strength map, satisfied controls)
-2. **Policy Matching** — evaluate each enabled policy's conditions using 9 independent matchers. Conditions are AND'd together; a policy applies only if all configured conditions match. Unconfigured conditions default to match-all.
-3. **Grant Resolution** — resolve grant controls per-policy first (respecting each policy's AND/OR operator), then cross-policy AND: every applicable policy must be independently satisfied. Block in any policy always wins. Custom authentication strengths are resolved via the tenant's auth strength policies.
-4. **Session Control Aggregation** — merge session controls from all applicable policies using most-restrictive-wins rules. Includes sign-in frequency, persistent browser, cloud app security, continuous access evaluation, app-enforced restrictions, resilience defaults, and token protection.
-
-Every step produces a trace entry, giving full visibility into why each policy was applied, skipped, or report-only.
-
 ## Visualization Modes
 
-**Grid** — Tile-based overview of all policies, color-coded by category (Identity, Security, Device, Location, Risk, App Protection, Session). After evaluation, applied policies glow green/orange/red and skipped policies dim.
+**Grid** — Tile-based overview of all policies, color-coded by category (Identity, Security, Device, Location, Risk, App Protection, Session). After evaluation, applied policies glow green/orange/red, skipped policies dim.
 
-**Matrix** — Diagnostic heatmap with policies as rows and condition types as columns. Shows exactly which condition knocked out each policy. Rows sort by evaluation outcome.
+**Matrix** — Diagnostic heatmap with policies as rows and condition types as columns. Shows exactly which condition knocked out each policy. Knockout cells are emphasized, and rows sort by evaluation outcome.
 
-**Flow** — Sankey diagram showing how policies funnel through six evaluation stages (All → State → Users → Apps → Other → Verdict). Policies exit the funnel at the stage where they fail. Report-only policies flow on a parallel track.
+**Flow** — Sankey/alluvial diagram showing how policies funnel through six evaluation stages (All → State → Users → Apps → Other → Verdict). Policies exit the funnel at the stage where they fail. Report-only policies flow on a parallel track.
 
-**Gaps** — Automated coverage gap analysis. Sweeps all combinations of platform, client app, location, and risk level to find unprotected scenarios. Classifies findings by severity (critical/warning/caution/info) and gap type (no-policy, no-MFA, no-device-compliance, legacy-auth). Supports generic personas, selected users, or guided 5-slot persona mapping. Uses full-width layout with inline user picker.
+**Gaps** — Automated coverage gap analysis. Sweeps all combinations of platform, client app, location, and risk level to find unprotected scenarios. Classifies findings by severity (critical/warning/caution/info) and gap type (no-policy, no-MFA, no-device-compliance, legacy-auth). Supports generic personas, selected users, or guided 5-slot persona mapping.
 
-**Impact** — Policy removal impact analysis. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations to measure the effect. Shows a weighted security posture score, affected user breakdown (red/green pills by user type), contextual fallback analysis identifying which other policies still cover the gap, and "other protection active" cards. Policies are classified as Critical, High, Medium, or Low severity.
+**Impact** — Policy removal impact assessment. For every enabled policy, the engine removes it and re-evaluates all 5,760 scenario combinations, plus dedicated agent grids for agent-targeting policies. Shows weighted security posture score changes, verdict transitions, affected user types, coverage gaps created, contextual fallback analysis (which other policies still protect you and what they cover), and other active protection. Policies are ranked by severity: Critical (verdict changes or agent protection loss), High (controls lost), Medium (partial degradation), Low (fully covered by other policies).
 
-**Sandbox** — Not a view but a mode: the header switch puts the whole app into a hypothetical state. Toggle policy states on the Grid tiles or detail panel, edit assignments inline (removable chips for every included/excluded user, group, role, and app; add users via search and apps from the tenant catalog), and every view evaluates the sandboxed set — with a change-tracking bar, ghost chips with undo for removed entries, amber modified markers on Grid tiles, a sandbox-vs-live diff panel itemizing scoping changes by field, and a verdict banner line showing what the live tenant does today whenever results differ.
+**Baseline** — Outcome-based assessment against Microsoft's CA templates and recommendations: 21 checks across Secure Foundation, Zero Trust, Remote Work, Protect Administrators, Emerging Threats, and AI Agents. Checks run targeted scenarios through the engine and require the protection to be guaranteed, with report-only detection and one-click Fix-in-Sandbox template drafts.
 
-**Baseline** — Assessment against Microsoft's Conditional Access policy templates across Secure Foundation, Zero Trust, Remote Work, Protect Administrators, and Emerging Threats. Verdicts are outcome-based — checks run targeted scenarios through the engine and require the protection to be guaranteed, so scope holes and OR-grant loopholes are caught. Report-only policies that would satisfy a check are called out by name, and with sandbox mode active you can promote one and watch the check pass. Failing checks offer Fix in Sandbox, which drafts the Microsoft template policy and re-assesses on the spot. License-gated checks (Entra ID P2, Purview) are labeled and filterable.
-
-**Export** — The sandbox's Export button turns every change — state toggles, scoping edits, drafted policies — into a deployment package: a Markdown change plan with deployment checklist, a Microsoft Graph PowerShell script with plain-language comments per change, and Graph-ready policy JSON with correct wire formats. New policies export in a non-enforcing state (Off by default, Report-only optional). All artifacts are generated in the browser; the app requests no write permissions and never touches your tenant.
+**Sandbox** — A mode, not a view: the header switch puts the whole app into a hypothetical state. Toggle policy states, edit scoping, draft policies from templates; every view evaluates the sandboxed set, with a sandbox-vs-live diff panel and a local change-plan export (Markdown / Graph PowerShell / JSON).
 
 ## Architecture
 
 ```
-Engine Layer       Pure TypeScript, zero dependencies, fully testable in isolation
-                   11 condition matchers, identity-type gate, 4-phase pipeline, 660 unit tests
+Engine Layer     Pure TypeScript, zero dependencies
+                 11 condition matchers, identity-type gate (user/agent),
+                 4-phase evaluation pipeline — 701 unit tests
 
-Data Layer         MSAL authentication, Graph API policy fetch + pagination
-                   Batch GUID resolution, named location lookup, persona search
-                   Single normalization point from Graph API → typed engine models
+Data Layer       MSAL authentication (loginRedirect flow)
+                 Graph API: policy fetch (beta endpoint — v1.0 strips agent
+                 targeting), GUID resolution, persona search
+                 Tenant app discovery (enterprise apps + app registrations)
+                 Normalization from Graph API to typed engine models
 
-State Layer        Zustand stores: policies, evaluation results, persona cache
-                   Mode-agnostic — engine receives identical types from sample or live data
+Analysis         Impact analysis — per-policy removal with weighted scoring
+                 Coverage gap analysis — brute-force scenario sweep
+                 Baseline assessment — 21 outcome-based template checks
+                 Sandbox — state/scoping overrides, drafts, sweep diff
+                 Change plan export — Graph PowerShell / JSON / Markdown
+                 Persona mapping — 5-slot guided user assignment
 
-Visualization      React 18, Shadcn/UI + Tailwind CSS v4, D3 Sankey diagram
-                   CSS Grid tiles, HTML heatmap table, gap analysis UI, impact analysis UI
+Visualization    React 18, Zustand state, Shadcn/UI components
+                 D3 Sankey diagram, CSS Grid tiles, HTML heatmap table
 ```
 
-The engine is a standalone TypeScript module with no knowledge of React, the DOM, or Microsoft Graph. It takes policy data and a simulation context as input and produces structured evaluation results with a full trace as output.
-
-## Development
-
-```bash
-npm run dev          # Vite dev server with HMR
-npm test             # Run all 660 engine tests
-npm run test:watch   # Watch mode
-npm run build        # Production build
-```
-
-Run a single test file:
-
-```bash
-npx vitest run src/engine/__tests__/conditions/UserConditionMatcher.test.ts
-```
-
-The engine is tested independently of the UI. Each of the 11 condition matchers has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine, gap analysis, and impact analysis.
-
-The `/privacy` and `/terms` routes rely on Vercel's clean URL rewrites. Locally, use `/privacy/index.html` and `/terms/index.html` instead.
+The engine is a standalone TypeScript module. It takes policy data and a simulation context as input, produces structured evaluation results as output, and has no knowledge of React, the DOM, or Microsoft Graph.
 
 ## Tech Stack
 
 TypeScript (strict) · React 18 · Vite · Tailwind CSS v4 · Shadcn/UI · Zustand · D3 (d3-sankey) · MSAL.js · Vitest
+
+## Testing
+
+```bash
+npm test        # Run all 701 engine tests
+npm run build   # Production build
+```
+
+The engine is tested independently of the UI. Each condition matcher has its own test file, plus integration tests for the policy evaluator, grant resolver, session aggregator, agent identity isolation rules, full engine, gap analysis, impact analysis, baseline assessment (including a template self-test loop), sandbox overrides, change plan export, and the analytics event allowlist.
 
 ## License
 

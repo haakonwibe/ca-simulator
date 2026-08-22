@@ -11,13 +11,22 @@ import {
 import { getAccessToken } from '../services/auth';
 import { GraphPermissionError, ADMIN_CONSENT_ERROR } from '../services/graphClient';
 import { SAMPLE_PERSONAS } from '../data/samplePersonas';
+import { GAP_PERSONA_SLOTS, type GapPersonaSlot } from '../lib/gapPersonas';
 
 // Module-scoped in-flight request tracker to deduplicate concurrent resolveAndCache calls
 const inflight = new Map<string, Promise<UserContext>>();
 
+/** Fresh, unmapped slots — one source for both the initial state and clear(). */
+function emptySlots(): GapPersonaSlot[] {
+  return GAP_PERSONA_SLOTS.map((slot) => ({ ...slot, user: undefined }));
+}
+
 interface PersonaState {
   // Resolved personas cache: userId → UserContext
   resolvedPersonas: Map<string, UserContext>;
+  /** Guided persona mapping, shared by the Gaps sweep and the Baseline assessment.
+   *  Lives here rather than in a view so a mapping survives switching tabs. */
+  personaSlots: GapPersonaSlot[];
   // Currently selected persona for simulation
   selectedPersonaId: string | null;
   /** True while ANY resolution is in flight (counter-backed — concurrent
@@ -34,11 +43,14 @@ interface PersonaState {
   resolveAndCacheSample: (userId: string) => UserContext | null;
   selectPersona: (userId: string) => void;
   getSelectedContext: () => UserContext | null;
+  setSlotUser: (slotKey: string, user: UserContext) => void;
+  clearSlotUser: (slotKey: string) => void;
   clear: () => void;
 }
 
 export const usePersonaStore = create<PersonaState>((set, get) => ({
   resolvedPersonas: new Map(),
+  personaSlots: emptySlots(),
   selectedPersonaId: null,
   isResolving: false,
   resolvingCount: 0,
@@ -139,9 +151,26 @@ export const usePersonaStore = create<PersonaState>((set, get) => ({
     return resolvedPersonas.get(selectedPersonaId) ?? null;
   },
 
+  setSlotUser: (slotKey: string, user: UserContext) => {
+    set((s) => ({
+      personaSlots: s.personaSlots.map((slot) => (slot.key === slotKey ? { ...slot, user } : slot)),
+    }));
+  },
+
+  clearSlotUser: (slotKey: string) => {
+    set((s) => ({
+      personaSlots: s.personaSlots.map((slot) =>
+        slot.key === slotKey ? { ...slot, user: undefined } : slot,
+      ),
+    }));
+  },
+
   clear: () => {
+    // Called on logout and on data-source switch — mapped accounts belong to the
+    // tenant that was signed in, so they must not survive either.
     set({
       resolvedPersonas: new Map(),
+      personaSlots: emptySlots(),
       selectedPersonaId: null,
       error: null,
     });

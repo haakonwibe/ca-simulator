@@ -19,7 +19,10 @@
     ul { list-style: none; padding-left: 0; margin-bottom: 1rem; }
     ul li { font-size: 0.9375rem; padding-left: 1.25rem; position: relative; margin-bottom: 0.35rem; }
     ul li::before { content: "\2022"; position: absolute; left: 0; color: #64748b; }
+    h3 { font-size: 1rem; margin: 1.5rem 0 0.5rem; color: #e2e8f0; }
     code { font-size: 0.8125rem; padding: 0.125rem 0.375rem; border-radius: 4px; background: rgba(59,130,246,0.1); color: #3b82f6; }
+    pre { overflow-x: auto; padding: 0.875rem 1rem; border-radius: 6px; background: rgba(59,130,246,0.06); border: 1px solid rgba(59,130,246,0.15); }
+    pre code { padding: 0; background: none; line-height: 1.5; }
     .footer { margin-top: 3rem; padding-top: 1.5rem; border-top: 1px solid #1e293b; font-size: 0.8125rem; color: #64748b; }
   </style>
 </head>
@@ -28,10 +31,11 @@
     <a href="/" class="back">&larr; Back to CA Simulator</a>
 
     <h1>Privacy Policy</h1>
-    <p class="updated">Last updated: February 2026</p>
+    <p class="updated">Last updated: August 2026</p>
 
     <h2>Summary</h2>
-    <p>CA Simulator does not collect, store, or transmit any of your data. Period.</p>
+    <p>CA Simulator never collects, stores, or transmits your tenant data. Your policies, users, groups, scenarios, and results never leave your browser. Period.</p>
+    <p>The site does record anonymous page views and usage events &mdash; which tab you opened, whether you were in sample or live mode &mdash; from a fixed list published in full below. No cookies are used for either. You can switch both off.</p>
 
     <h2>How It Works</h2>
     <p>CA Simulator runs entirely in your browser. When you connect to your tenant, your browser authenticates directly with Microsoft Entra ID using MSAL.js and retrieves data directly from Microsoft Graph API. No data passes through our servers.</p>
@@ -42,7 +46,7 @@
       <li>We do not store user information, group memberships, or role assignments</li>
       <li>We do not log your simulation scenarios or results</li>
       <li>We do not use cookies for tracking</li>
-      <li>We do not share any data with third parties</li>
+      <li>We do not share your tenant data with third parties</li>
     </ul>
 
     <h2>Authentication</h2>
@@ -57,7 +61,40 @@
     <p>These are delegated permissions, meaning they operate within the signed-in user's own access level. The app cannot access anything the user cannot already access themselves.</p>
 
     <h2>Analytics</h2>
-    <p>We use Vercel Web Analytics, which collects anonymous page view data (page URL, referrer, country) with no cookies and no personal data. See <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Vercel's privacy policy</a>.</p>
+    <p>Two separate things are measured, and it is worth being precise about which is which.</p>
+
+    <h3>Page views</h3>
+    <p>We use Vercel Web Analytics, which records anonymous page views &mdash; page address, referrer, and country &mdash; with no cookies and no personal data. This tells us how many people visit and roughly how they found us. See <a href="https://vercel.com/legal/privacy-policy" target="_blank" rel="noopener noreferrer">Vercel's privacy policy</a>.</p>
+
+    <h3>Product usage events</h3>
+    <p>These run on <a href="https://umami.is" target="_blank" rel="noopener noreferrer">Umami</a> that we host ourselves, in Frankfurt, on a database in the same region. No third-party analytics company receives them and no third-party script is involved &mdash; the app posts them to our own server.</p>
+    <p>These events carry no page address, no referrer, no screen size and no language. What they do carry is a short list of things you did in the app, so we can see which features are actually used. This is the complete list &mdash; the app is built so that nothing else can be sent:</p>
+    <ul>
+      <li><code>view_opened</code> &mdash; which of the six tabs was opened (Grid, Matrix, Flow, Gaps, Impact, Baseline), and whether you were in sample or live mode</li>
+      <li><code>source_chosen</code> &mdash; whether you chose sample data or your tenant</li>
+      <li><code>load_outcome</code> &mdash; whether a tenant load succeeded, needed admin consent, or failed. The outcome only &mdash; never the error text</li>
+      <li><code>sandbox</code> &mdash; that you entered the sandbox, changed something in it, compared it, or reset it</li>
+      <li><code>baseline_fix</code> &mdash; which of our own baseline checks you drafted a fix for</li>
+      <li><code>export</code> &mdash; which change-plan format you copied or downloaded</li>
+      <li><code>evaluated</code> &mdash; that a simulation ran, in sample or live mode, and whether you clicked Evaluate or the app ran it for you. Never the scenario you configured and never the verdict</li>
+      <li><code>analysis_run</code> &mdash; that a Gaps or Impact sweep ran, and for Gaps which persona mode it used. Never the findings</li>
+      <li><code>app_error</code> &mdash; that the app hit an uncaught error or a failed promise, so crashes are not invisible to us. The kind only &mdash; never the message, the stack, or the file</li>
+    </ul>
+    <p>Every value in those events comes from a fixed list written into the app's source code and checked again before each event is sent. Policy names, user or group names, application names, tenant names, GUIDs, error messages, and counts of any kind are never sent, and cannot be: an event carrying anything outside the list is discarded rather than transmitted.</p>
+    <p>In particular, we record <em>that</em> you ran a simulation or a sweep, never what was in it. The scenario you configure and the verdict you get back stay in your browser, as does everything the Gaps, Impact, and Baseline tabs compute.</p>
+    <p>A complete request looks like this, and this is the whole of it &mdash; the event name, its values from the list above, and a constant <code>/</code> in place of a page address:</p>
+    <pre><code>{ "type": "event",
+  "payload": {
+    "website": "&lt;this site's id&gt;",
+    "name":    "view_opened",
+    "data":    { "view": "baseline", "mode": "sample" },
+    "url":     "/"
+  } }</code></pre>
+    <p>Like any web server, ours sees the IP address and browser user-agent that every request carries. From those, our analytics server records your <strong>country, browser and device type</strong>, and forms a temporary daily visitor hash so that one person opening four tabs is not counted as four people. The hash cannot be reversed to an IP address and changes every day. <strong>Your IP address itself is never stored</strong> &mdash; there is no field for it in the database. None of this is linked to your sign-in, your tenant, or anything you do in the app.</p>
+
+    <h2>Your Choices</h2>
+    <p>Page views and usage events are both switched off entirely if your browser sends a <strong>Do Not Track</strong> signal &mdash; no setting in the app can override that. You can also turn them off yourself: open the <strong>About</strong> dialog and switch off &ldquo;Send anonymous usage events&rdquo;. One switch covers both; neither can be left running while the other is off. With either in force, usage events are never sent at all &mdash; the request is not made, rather than made and discarded.</p>
+    <p>That preference is kept in a single browser <code>localStorage</code> entry (<code>ca-sim:analytics-opt-out</code>) holding the word <code>true</code>. It is a preference flag, not an identifier &mdash; it contains nothing about you, is never sent anywhere, and is the only thing this app stores outside the sign-in session.</p>
 
     <h2>Sample Mode</h2>
     <p>Sample mode uses hardcoded demo data. No authentication or API calls are made. No data leaves your browser.</p>

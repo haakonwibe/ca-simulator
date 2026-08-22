@@ -1,5 +1,6 @@
 // components/AboutDialog.tsx — "About CA Simulator" info dialog.
 
+import { useState } from 'react';
 import { COLORS, APP_VERSION } from '@/data/theme';
 import {
   Dialog,
@@ -8,6 +9,8 @@ import {
   DialogTitle,
   DialogDescription,
 } from '@/components/ui/dialog';
+import { Switch } from '@/components/ui/switch';
+import { hasOptedOut, setOptedOut, isDoNotTrackEnabled } from '@/lib/analytics';
 
 const PERMISSIONS = [
   { name: 'Policy.Read.All', desc: 'Read Conditional Access policies' },
@@ -41,11 +44,13 @@ export function AboutDialog({
           </Section>
 
           <Section title="Privacy & Security">
-            This app runs entirely in your browser. No data is sent to any
-            server — all communication happens directly between your browser and
-            Microsoft's Graph API. Nothing is stored, logged, or transmitted to
-            third parties.
+            This app runs entirely in your browser. Your tenant data — policies,
+            users, groups, scenarios, and results — is never stored, logged, or
+            transmitted to third parties. All communication happens directly
+            between your browser and Microsoft's Graph API.
           </Section>
+
+          <AnalyticsOptOut />
 
           <p style={{ color: COLORS.textMuted }}>
             The app registration requests read-only delegated permissions in your
@@ -103,6 +108,43 @@ export function AboutDialog({
         </div>
       </DialogContent>
     </Dialog>
+  );
+}
+
+/**
+ * Anonymous usage events are on by default and describe interactions only —
+ * which tab was opened, sample or live mode, whether an export happened. Do Not
+ * Track overrides the switch, so the UI reflects that rather than claiming
+ * events are being sent when they are not.
+ */
+function AnalyticsOptOut() {
+  const dnt = isDoNotTrackEnabled();
+  const [enabled, setEnabled] = useState(() => !hasOptedOut());
+
+  const toggle = (next: boolean) => {
+    setOptedOut(!next);
+    setEnabled(next);
+  };
+
+  return (
+    <div className="flex items-start justify-between gap-4 rounded border px-3 py-2" style={{ borderColor: COLORS.border }}>
+      <div>
+        <div className="text-xs font-medium" style={{ color: COLORS.text }}>
+          Send anonymous usage events
+        </div>
+        <p className="mt-0.5 text-xs" style={{ color: COLORS.textDim }}>
+          {dnt
+            ? 'Disabled — your browser sends Do Not Track.'
+            : 'Which tab you open, sample or live mode, and whether you export. Never policy names, identifiers, or tenant data.'}
+        </p>
+      </div>
+      <Switch
+        checked={!dnt && enabled}
+        disabled={dnt}
+        onCheckedChange={toggle}
+        aria-label="Send anonymous usage events"
+      />
+    </div>
   );
 }
 

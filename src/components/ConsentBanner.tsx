@@ -27,7 +27,7 @@ export function ConsentBanner() {
         risk: { signInRiskLevel: 'none', userRiskLevel: 'none', insiderRiskLevel: 'none' },
         satisfiedControls: [],
       };
-      useEvaluationStore.getState().evaluate(policies, context);
+      useEvaluationStore.getState().evaluate(policies, context, 'auto');
     }
   };
 

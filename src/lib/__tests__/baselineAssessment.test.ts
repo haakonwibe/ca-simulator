@@ -1,9 +1,11 @@
 // lib/__tests__/baselineAssessment.test.ts — Outcome-based baseline assessment tests.
 
 import { describe, it, expect } from 'vitest';
-import { assessBaseline, type BaselineCheckResult } from '../baselineAssessment';
+import { assessBaseline, type BaselineCheckResult, type BaselinePersonaInput } from '../baselineAssessment';
 import { BASELINE_CHECKS, AZURE_MANAGEMENT_APP_ID } from '@/data/baselineChecks';
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
+import type { UserContext } from '@/engine/models/SimulationContext';
+import { classifyPersona } from '../gapPersonas';
 
 // ── Helpers ──
 
@@ -471,5 +473,155 @@ describe('summaries', () => {
     const result = assessBaseline([]);
     expect(result.categoryCounts.secureFoundation.total).toBeGreaterThanOrEqual(7);
     expect(result.categoryCounts.secureFoundation.passed).toBe(0);
+  });
+});
+
+// ── Real personas (v0.6.13) ──
+//
+// The synthetic admin carries the GA role template id, no group memberships and
+// no real object id, so a policy that guarantees the control but EXCLUDES real
+// admins passed every scenario. These cover the live-tenant case that exposed it.
+
+const GA_ROLE = '62e90394-69f5-4237-9190-012177145e10';
+
+const realAdmin: UserContext = {
+  id: '11111111-2222-3333-4444-555555555555',
+  displayName: 'admin@contoso.com',
+  userType: 'member',
+  memberOfGroupIds: ['group-admins'],
+  directoryRoleIds: [GA_ROLE],
+};
+
+/** Compliant device for everyone — the shape that produced the false pass. */
+const compliantForAll = (excludeUsers: string[] = []) =>
+  createPolicy({
+    id: 'mdm-compliant',
+    displayName: 'Require MDM-enrolled and compliant device for all users',
+    conditions: createBaseConditions({
+      users: {
+        includeUsers: ['All'],
+        excludeUsers,
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['compliantDevice'] },
+  });
+
+describe('classifyPersona', () => {
+  it('classifies by what the account is, not the slot it was dropped into', () => {
+    expect(classifyPersona(realAdmin)).toBe('admin');
+    expect(classifyPersona({ ...realAdmin, directoryRoleIds: [] })).toBe('member');
+    expect(classifyPersona({ ...realAdmin, userType: 'guest' })).toBe('guest');
+    // guest wins over a directory role — a guest is assessed as a guest
+    expect(classifyPersona({ ...realAdmin, userType: 'guest', directoryRoleIds: [GA_ROLE] })).toBe('guest');
+  });
+});
+
+describe('assessBaseline with real personas', () => {
+  const persona = (over?: Partial<BaselinePersonaInput>): BaselinePersonaInput => ({
+    user: realAdmin,
+    label: realAdmin.displayName,
+    isException: false,
+    ...over,
+  });
+
+  it('passes 120/120 for the synthetic admin even when the real admin is excluded', () => {
+    // The bug, pinned: without personas the exclusion is invisible.
+    const check = getCheck(assessBaseline([compliantForAll([realAdmin.id])]), 'compliant-or-hybrid-admins');
+    expect(check.status).toBe('pass');
+    expect(check.scenariosPassed).toBe(check.scenariosTotal);
+  });
+
+  it('drops to partial when the real admin is excluded by object id', () => {
+    const check = getCheck(
+      assessBaseline([compliantForAll([realAdmin.id])], undefined, [persona()]),
+      'compliant-or-hybrid-admins',
+    );
+
+    expect(check.status).toBe('partial');
+
+    const synthetic = check.personaResults.find((p) => p.kind === 'synthetic')!;
+    const real = check.personaResults.find((p) => p.kind === 'real')!;
+    expect(synthetic.passed).toBe(synthetic.total);
+    expect(real.label).toBe('admin@contoso.com');
+    expect(real.passed).toBe(0);
+    expect(check.scenariosTotal).toBe(synthetic.total + real.total);
+    // The failing examples name the real account, not a synthetic stand-in
+    expect(check.failingExamples.some((e) => e.includes('admin@contoso.com'))).toBe(true);
+  });
+
+  it('stays pass when the real admin is genuinely covered', () => {
+    const check = getCheck(
+      assessBaseline([compliantForAll()], undefined, [persona()]),
+      'compliant-or-hybrid-admins',
+    );
+
+    expect(check.status).toBe('pass');
+    expect(check.personaResults).toHaveLength(2);
+    expect(check.personaResults.every((p) => p.passed === p.total)).toBe(true);
+  });
+
+  it('sorts the synthetic persona first so a real failure reads against a baseline', () => {
+    const check = getCheck(
+      assessBaseline([compliantForAll([realAdmin.id])], undefined, [persona()]),
+      'compliant-or-hybrid-admins',
+    );
+    expect(check.personaResults[0].kind).toBe('synthetic');
+  });
+
+  it('routes exception accounts out of the arithmetic entirely', () => {
+    const breakGlass: UserContext = { ...realAdmin, id: 'bg-0000', displayName: 'Break Glass Admin' };
+    const check = getCheck(
+      assessBaseline([compliantForAll([breakGlass.id])], undefined, [
+        persona({ user: breakGlass, label: 'Break Glass Admin', isException: true }),
+      ]),
+      'compliant-or-hybrid-admins',
+    );
+
+    // Excluded from everything, yet the check is unaffected
+    expect(check.status).toBe('pass');
+    expect(check.personaResults.every((p) => p.kind === 'synthetic')).toBe(true);
+    expect(check.exceptionResults).toHaveLength(1);
+    expect(check.exceptionResults[0].label).toBe('Break Glass Admin');
+    expect(check.exceptionResults[0].passed).toBe(0);
+    expect(check.exceptionResults[0].total).toBeGreaterThan(0);
+    expect(check.exceptionResults[0].failingExamples.length).toBeGreaterThan(0);
+  });
+
+  it('routes a real account only to checks targeting its own persona class', () => {
+    const guest: UserContext = {
+      id: '99999999-2222-3333-4444-555555555555',
+      displayName: 'guest@partner.com',
+      userType: 'guest',
+      memberOfGroupIds: [],
+      directoryRoleIds: [],
+    };
+    const result = assessBaseline([compliantForAll()], undefined, [
+      persona({ user: guest, label: 'guest@partner.com' }),
+    ]);
+
+    // admin-only check never sees the guest
+    const adminCheck = getCheck(result, 'compliant-or-hybrid-admins');
+    expect(adminCheck.personaResults.some((p) => p.label === 'guest@partner.com')).toBe(false);
+    // a guest-targeting check does
+    const guestCheck = getCheck(result, 'require-mfa-guests');
+    expect(guestCheck.personaResults.some((p) => p.label === 'guest@partner.com')).toBe(true);
+  });
+
+  it('leaves agent checks identical whether or not personas are supplied', () => {
+    const policies = [compliantForAll()];
+    const without = assessBaseline(policies);
+    const with_ = assessBaseline(policies, undefined, [persona()]);
+
+    for (const id of ['block-high-risk-agents', 'approved-agents-only']) {
+      const a = getCheck(without, id);
+      const b = getCheck(with_, id);
+      expect(b.status).toBe(a.status);
+      expect(b.scenariosTotal).toBe(a.scenariosTotal);
+      expect(b.exceptionResults).toHaveLength(0);
+    }
   });
 });

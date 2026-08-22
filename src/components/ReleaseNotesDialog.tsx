@@ -17,6 +17,46 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.14',
+    subtitle: 'Baseline Accuracy',
+    features: [
+      {
+        heading: 'Baseline Checks Against Your Own Accounts',
+        body: 'Baseline checks are assessed against representative personas, which no policy can exclude. You can now map real accounts from your tenant alongside them, so a check answers whether your actual administrators are covered rather than whether a typical one would be. Where the two disagree, both are shown side by side — the policy can be correctly shaped and still not reach the people you assumed it did.',
+      },
+      {
+        heading: 'Break-Glass Accounts Reported Separately',
+        body: 'Emergency access and service accounts are deliberately excluded from most policies, so counting them as failures would say nothing useful. They are assessed and reported under their own heading, with the exclusions visible to confirm, but they never move a check\u2019s result.',
+      },
+      {
+        heading: 'Device Trust Counted Consistently',
+        body: 'Coverage analysis now treats a hybrid joined device requirement as device trust, matching how the Baseline tab and Microsoft\u2019s own templates treat it. A grant offering compliant or hybrid joined device counts as guaranteeing device trust, since every path through it does. Tenants relying on hybrid join see their coverage reflected accurately.',
+      },
+      {
+        heading: 'The Baseline Tab, Across the Whole Window',
+        body: 'All 21 checks now tile across the available width instead of running down a single column, so the whole catalogue is visible at once. Opening a check expands it across the full row, where its evidence has room to be read.',
+      },
+      {
+        heading: 'Evidence Behind a Pass',
+        body: 'A passing check now names the policy providing the protection, flags any exclusions on it, and marks results that come from an unsaved sandbox draft rather than a policy in your tenant.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.12',
+    subtitle: 'Transparent Analytics',
+    features: [
+      {
+        heading: 'A Privacy Policy You Can Check',
+        body: 'The privacy policy now publishes the complete list of usage events the site records, event by event, rather than describing them in general terms. Your tenant data — policies, users, groups, scenarios, and results — still never leaves your browser, and the guarantee is now specific enough to verify rather than take on trust.',
+      },
+      {
+        heading: 'Usage Events, and How to Refuse Them',
+        body: 'Anonymous events record which tab you opened and whether you were in sample or live mode, so the features people actually use can be told apart from the ones they do not. Policy names, identifiers, error text, and counts are never included. Switch them off in the About dialog, or send Do Not Track and the app will not ask.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.10',
     subtitle: 'Scenario Clarity',
     features: [

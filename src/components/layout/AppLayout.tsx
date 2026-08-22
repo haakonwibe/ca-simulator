@@ -9,6 +9,7 @@ import { ExportChangesDialog } from '@/components/ExportChangesDialog';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS, APP_VERSION } from '@/data/theme';
+import { trackEvent } from '@/lib/analytics';
 
 export function AppLayout() {
   const activeView = useEvaluationStore((s) => s.activeView);
@@ -30,7 +31,13 @@ export function AppLayout() {
     <div className="flex h-screen flex-col overflow-hidden">
       <MobileNotice />
       <Header />
-      <SandboxBar onViewDiff={() => setDiffOpen(true)} onExport={() => setExportOpen(true)} />
+      <SandboxBar
+        onViewDiff={() => {
+          trackEvent({ name: 'sandbox', props: { step: 'diffed' } });
+          setDiffOpen(true);
+        }}
+        onExport={() => setExportOpen(true)}
+      />
       <SandboxDiffPanel open={diffOpen} onClose={() => setDiffOpen(false)} />
       <ExportChangesDialog open={exportOpen} onOpenChange={setExportOpen} />
       <div className="flex flex-1 overflow-hidden">

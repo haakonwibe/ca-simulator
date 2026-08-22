@@ -1,6 +1,6 @@
 {
   "name": "conditional-access-simulator",
-  "version": "0.6.10",
+  "version": "0.6.14",
   "description": "A Conditional Access policy simulator for Microsoft Entra ID",
   "author": "Haakon Wibe",
   "license": "MIT",
@@ -12,7 +12,8 @@
     "test": "vitest run",
     "test:watch": "vitest",
     "typecheck": "tsc --noEmit",
-    "check": "npm run typecheck && npm run test"
+    "check": "npm run typecheck && npm run test",
+    "sync:public": "node scripts/sync-public.mjs"
   },
   "devDependencies": {
     "@tailwindcss/vite": "^4.1.18",
@@ -39,7 +40,7 @@
     "@radix-ui/react-slot": "^1.2.4",
     "@radix-ui/react-switch": "^1.2.6",
     "@radix-ui/react-tooltip": "^1.2.8",
-    "@vercel/analytics": "^1.6.1",
+    "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "d3-sankey": "^0.12.3",

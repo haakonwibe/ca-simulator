@@ -17,6 +17,8 @@ import {
   type AssignmentField,
 } from '../lib/sandbox';
 import { TEMPLATE_POLICIES, templateDraftId } from '../data/templatePolicies';
+import { GraphPermissionError, ADMIN_CONSENT_ERROR } from '../services/graphClient';
+import { trackEvent } from '../lib/analytics';
 
 interface PolicyStoreState {
   policies: ConditionalAccessPolicy[];
@@ -96,6 +98,9 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   loadFromGraph: async () => {
+    // Three components can load each source, so this lives here rather than at
+    // the buttons. Gated on an actual change so a refresh isn't a new choice.
+    if (get().dataSource !== 'live') trackEvent({ name: 'source_chosen', props: { mode: 'live' } });
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
@@ -131,7 +136,13 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         sandboxDrafts,
         effectivePolicies: computeEffectivePolicies(policies, sandboxActive, sandboxOverrides, sandboxAssignments, sandboxDrafts),
       });
+      trackEvent({ name: 'load_outcome', props: { outcome: 'ok' } });
     } catch (error) {
+      // The outcome is an enum, never the message — Graph errors carry tenant detail
+      const isConsent =
+        error instanceof GraphPermissionError ||
+        (error instanceof Error && error.message === ADMIN_CONSENT_ERROR);
+      trackEvent({ name: 'load_outcome', props: { outcome: isConsent ? 'consent_required' : 'error' } });
       set({
         isLoading: false,
         error: error instanceof Error ? error.message : 'Failed to load policies',
@@ -140,6 +151,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   loadSampleData: () => {
+    if (get().dataSource !== 'sample') trackEvent({ name: 'source_chosen', props: { mode: 'sample' } });
     const displayNames = new Map<string, string>();
     for (const [id, name] of Object.entries(SAMPLE_DISPLAY_NAMES)) {
       displayNames.set(id, name);
@@ -196,6 +208,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   setSandboxActive: (active) => {
+    if (active) trackEvent({ name: 'sandbox', props: { step: 'entered' } });
     const { policies, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
     set({
       sandboxActive: active,
@@ -208,6 +221,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
 
     // Drafts have no live counterpart — write the state into the draft itself
     if (policyId in sandboxDrafts) {
+      trackEvent({ name: 'sandbox', props: { step: 'changed' } });
       const drafts = { ...sandboxDrafts, [policyId]: { ...sandboxDrafts[policyId], state } };
       set({
         sandboxDrafts: drafts,
@@ -219,6 +233,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     const livePolicy = policies.find((p) => p.id === policyId);
     if (!livePolicy) return;
 
+    trackEvent({ name: 'sandbox', props: { step: 'changed' } });
     const overrides = { ...sandboxOverrides };
     if (livePolicy.state === state) {
       delete overrides[policyId]; // back to live state — not a change
@@ -236,6 +251,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
 
     // Drafts have no live counterpart — write the field into the draft itself
     if (policyId in sandboxDrafts) {
+      trackEvent({ name: 'sandbox', props: { step: 'changed' } });
       const draft = sandboxDrafts[policyId];
       const isAppField = field === 'includeApplications' || field === 'excludeApplications';
       const updated: ConditionalAccessPolicy = {
@@ -259,6 +275,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     const livePolicy = policies.find((p) => p.id === policyId);
     if (!livePolicy) return;
 
+    trackEvent({ name: 'sandbox', props: { step: 'changed' } });
     const assignments = { ...sandboxAssignments };
     const override = { ...(assignments[policyId] ?? {}) };
 
@@ -282,6 +299,13 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   createDraftFromTemplate: (checkId) => {
     const template = TEMPLATE_POLICIES.get(checkId);
     if (!template) return null;
+
+    // Tracked here rather than at the button so it fires only when a draft
+    // really is created; the id is validated against BASELINE_CHECKS downstream.
+    trackEvent({ name: 'baseline_fix', props: { checkId } });
+    // Fix-in-sandbox activates the sandbox directly, bypassing setSandboxActive
+    if (!get().sandboxActive) trackEvent({ name: 'sandbox', props: { step: 'entered' } });
+    trackEvent({ name: 'sandbox', props: { step: 'changed' } });
 
     const draftId = templateDraftId(checkId);
     const { policies, sandboxOverrides, sandboxAssignments, sandboxDrafts } = get();
@@ -316,6 +340,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   },
 
   resetSandbox: () => {
+    trackEvent({ name: 'sandbox', props: { step: 'reset' } });
     set({ sandboxOverrides: {}, sandboxAssignments: {}, sandboxDrafts: {}, effectivePolicies: get().policies });
   },
 

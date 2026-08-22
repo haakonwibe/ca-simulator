@@ -7,9 +7,10 @@ import { COLORS } from '@/data/theme';
 import { SAMPLE_PERSONAS } from '@/data/samplePersonas';
 import { analyzeGaps, groupGaps, detectDisagreement, getSweepScenarioCount } from '@/lib/gapAnalysis';
 import type { GapGroup, GapSeverity, GapPersonaSource, GapDisagreement } from '@/lib/gapAnalysis';
-import { GAP_PERSONA_SLOTS } from '@/lib/gapPersonas';
 import type { GapPersonaSlot } from '@/lib/gapPersonas';
+import { PersonaSlotCard, usePersonaSlots } from '@/components/PersonaMappingPanel';
 import { UserSearchInput } from '@/components/UserSearchInput';
+import { trackEvent, type EventTrigger } from '@/lib/analytics';
 import type { UserSearchResult } from '@/services/personaService';
 import type { UserContext } from '@/engine/models/SimulationContext';
 import { Button } from '@/components/ui/button';
@@ -88,7 +89,7 @@ const SLOT_ICONS: Record<string, typeof User> = {
 const GAP_TYPE_LABELS: Record<string, string> = {
   'no-policy': 'No Policy',
   'no-mfa': 'No MFA',
-  'no-device-compliance': 'No Device Compliance',
+  'no-device-compliance': 'No Device Trust',
   'no-mfa-or-device': 'No MFA or Device',
   'legacy-auth-not-blocked': 'Legacy Auth Not Blocked',
   'report-only': 'Report-Only',
@@ -261,70 +262,6 @@ function DisagreementBanner({ disagreement }: { disagreement: GapDisagreement })
         </div>
       </div>
     </Card>
-  );
-}
-
-// ── Persona slot card ──
-
-function PersonaSlotCard({
-  slot,
-  isResolving,
-  onSelect,
-  onClear,
-}: {
-  slot: GapPersonaSlot;
-  isResolving: boolean;
-  onSelect: (user: UserSearchResult) => void;
-  onClear: () => void;
-}) {
-  const SlotIcon = SLOT_ICONS[slot.key] ?? User;
-
-  return (
-    <div
-      className="rounded-lg border p-4"
-      style={{ borderColor: slot.user ? COLORS.accent + '40' : COLORS.border, backgroundColor: COLORS.bgCard }}
-    >
-      <div className="mb-2 flex items-center gap-2">
-        <SlotIcon className="h-4 w-4" style={{ color: slot.user ? COLORS.accent : COLORS.textMuted }} />
-        <span className="text-sm font-medium" style={{ color: COLORS.text }}>
-          {slot.label}
-        </span>
-      </div>
-      <p className="mb-3 text-xs" style={{ color: COLORS.textDim }}>
-        {slot.description}
-      </p>
-
-      {isResolving ? (
-        <div className="flex items-center gap-2 text-xs" style={{ color: COLORS.textMuted }}>
-          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-          Resolving memberships...
-        </div>
-      ) : slot.user ? (
-        <div className="flex items-center gap-2 rounded-md border border-border bg-card/50 px-3 py-2">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-2">
-              <span className="text-xs font-medium text-foreground truncate">
-                {slot.user.displayName}
-              </span>
-              <Badge variant="outline" className="text-[10px] px-1.5 py-0 shrink-0">
-                {slot.user.userType === 'guest' ? 'Guest' : 'Member'}
-              </Badge>
-            </div>
-            <div className="mt-0.5 text-[10px] text-muted-foreground">
-              {slot.user.memberOfGroupIds.length} groups &middot; {slot.user.directoryRoleIds.length} roles
-            </div>
-          </div>
-          <button
-            onClick={onClear}
-            className="text-muted-foreground hover:text-foreground shrink-0"
-          >
-            <X className="h-3.5 w-3.5" />
-          </button>
-        </div>
-      ) : (
-        <UserSearchInput onSelect={onSelect} placeholder={`Assign ${slot.label.toLowerCase()}...`} />
-      )}
-    </div>
   );
 }
 
@@ -598,12 +535,10 @@ export function GapsView() {
   const [activePersonaFilter, setActivePersonaFilter] = useState<string | null>(null);
   const [expandedGroups, setExpandedGroups] = useState<Set<string>>(new Set());
 
-  // Mapped persona state
-  const [personaSlots, setPersonaSlots] = useState<GapPersonaSlot[]>(
-    GAP_PERSONA_SLOTS.map((slot) => ({ ...slot, user: undefined }))
-  );
+  // Mapped persona state — slots live in usePersonaStore so the Baseline tab sees
+  // the same mapping; only view state stays local to this view.
+  const { personaSlots, resolvingSlot, selectSlotUser, clearSlotUser } = usePersonaSlots();
   const [mappingComplete, setMappingComplete] = useState(false);
-  const [isResolvingSlot, setIsResolvingSlot] = useState<string | null>(null);
 
   const mappedCount = personaSlots.filter((s) => s.user).length;
   const mappedUsers = personaSlots
@@ -625,8 +560,9 @@ export function GapsView() {
 
   // sourceOverride lets callers pass the new source directly, avoiding stale closure
   // when setPersonaSource hasn't flushed yet.
-  const runAnalysis = useCallback((sourceOverride?: GapPersonaSource) => {
+  const runAnalysis = useCallback((trigger: EventTrigger, sourceOverride?: GapPersonaSource) => {
     const effectiveSource = sourceOverride ?? personaSource;
+    trackEvent({ name: 'analysis_run', props: { view: 'gaps', trigger, personas: effectiveSource } });
     setActivePersonaFilter(null);
     setExpandedGroups(new Set());
     setIsAnalyzing(true);
@@ -669,7 +605,7 @@ export function GapsView() {
       lastAnalyzedPoliciesRef.current !== policies &&
       policies.length > 0
     ) {
-      runAnalysis();
+      runAnalysis('auto');
     }
   }, [policies, runAnalysis]);
 
@@ -681,40 +617,13 @@ export function GapsView() {
     // For 'resolved', show mapping UI if not yet completed (don't auto-analyze)
     if (source === 'resolved' && !mappingComplete) return;
     if (lastAnalyzedPoliciesRef.current !== null && policies.length > 0) {
-      runAnalysis(source);
+      runAnalysis('manual', source);
     }
   }, [runAnalysis, policies, mappingComplete]);
 
-  // Slot handlers
-  const handleSlotSelect = async (slotKey: string, searchResult: UserSearchResult) => {
-    setIsResolvingSlot(slotKey);
-    try {
-      let resolved: UserContext | null;
-      if (dataSource === 'sample') {
-        resolved = usePersonaStore.getState().resolveAndCacheSample(searchResult.id);
-      } else {
-        resolved = await usePersonaStore.getState().resolveAndCache(searchResult.id);
-      }
-      if (resolved) {
-        setPersonaSlots((prev) =>
-          prev.map((s) => (s.key === slotKey ? { ...s, user: resolved } : s))
-        );
-      }
-    } catch (err) {
-      console.error('Failed to resolve user for slot:', err instanceof Error ? err.message : 'Unknown error');
-    }
-    setIsResolvingSlot(null);
-  };
-
-  const handleSlotClear = (slotKey: string) => {
-    setPersonaSlots((prev) =>
-      prev.map((s) => (s.key === slotKey ? { ...s, user: undefined } : s))
-    );
-  };
-
   const handleAnalyzeMapped = () => {
     setMappingComplete(true);
-    runAnalysis('resolved');
+    runAnalysis('manual', 'resolved');
   };
 
   const handleRemap = () => {
@@ -794,9 +703,9 @@ export function GapsView() {
               <PersonaSlotCard
                 key={slot.key}
                 slot={slot}
-                isResolving={isResolvingSlot === slot.key}
-                onSelect={(user) => handleSlotSelect(slot.key, user)}
-                onClear={() => handleSlotClear(slot.key)}
+                isResolving={resolvingSlot === slot.key}
+                onSelect={(user) => selectSlotUser(slot.key, user)}
+                onClear={() => clearSlotUser(slot.key)}
               />
             ))}
 
@@ -833,7 +742,7 @@ export function GapsView() {
           Sweep {policies.length} policies across {scenarioCount.toLocaleString()} scenario combinations to find coverage gaps.
         </p>
         <Button
-          onClick={() => runAnalysis()}
+          onClick={() => runAnalysis('manual')}
           className="gap-2"
           style={{ backgroundColor: COLORS.accent }}
         >
@@ -879,7 +788,7 @@ export function GapsView() {
         <Button
           variant="ghost"
           size="sm"
-          onClick={() => runAnalysis()}
+          onClick={() => runAnalysis('manual')}
           className="mt-2 text-xs"
           style={{ color: COLORS.textMuted }}
         >
@@ -944,7 +853,7 @@ export function GapsView() {
           <Button
             variant="ghost"
             size="sm"
-            onClick={() => runAnalysis()}
+            onClick={() => runAnalysis('manual')}
             className="h-7 text-xs"
             style={{ color: COLORS.textMuted }}
           >

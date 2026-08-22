@@ -14,11 +14,20 @@ import { PolicyDetailPanel } from '@/components/PolicyDetailPanel';
 import { ResultsSummary } from '@/components/ResultsSummary';
 import { ConsentBanner } from '@/components/ConsentBanner';
 import { SandboxChip } from '@/components/SandboxBar';
+import { trackEvent, type AnalyticsView } from '@/lib/analytics';
 
 export function MainContent() {
   const activeView = useEvaluationStore((s) => s.activeView);
   const setActiveView = useEvaluationStore((s) => s.setActiveView);
   const policyError = usePolicyStore((s) => s.error);
+  const dataSource = usePolicyStore((s) => s.dataSource);
+
+  // Tracked here rather than in setActiveView so only deliberate tab clicks
+  // count — BaselineView navigates to 'grid' programmatically after drafting.
+  const openView = (view: AnalyticsView) => {
+    if (dataSource !== 'none') trackEvent({ name: 'view_opened', props: { view, mode: dataSource } });
+    setActiveView(view);
+  };
 
   if (policyError === ADMIN_CONSENT_ERROR) {
     return (
@@ -38,7 +47,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'grid' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('grid')}
+          onClick={() => openView('grid')}
         >
           <LayoutGrid className="h-3.5 w-3.5" />
           Grid
@@ -47,7 +56,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'matrix' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('matrix')}
+          onClick={() => openView('matrix')}
         >
           <List className="h-3.5 w-3.5" />
           Matrix
@@ -56,7 +65,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'sankey' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('sankey')}
+          onClick={() => openView('sankey')}
         >
           <GitBranch className="h-3.5 w-3.5" />
           Flow
@@ -65,7 +74,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'gaps' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('gaps')}
+          onClick={() => openView('gaps')}
         >
           <ShieldAlert className="h-3.5 w-3.5" />
           Gaps
@@ -74,7 +83,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'impact' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('impact')}
+          onClick={() => openView('impact')}
         >
           <Zap className="h-3.5 w-3.5" />
           Impact
@@ -83,7 +92,7 @@ export function MainContent() {
           variant="ghost"
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'baseline' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
-          onClick={() => setActiveView('baseline')}
+          onClick={() => openView('baseline')}
         >
           <ClipboardCheck className="h-3.5 w-3.5" />
           Baseline

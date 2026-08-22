@@ -1,100 +1,231 @@
-# CLAUDE.md
-
-This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+# CLAUDE.md — Project Instructions for Claude Code
 
 ## Project Overview
 
-A Microsoft Entra ID Conditional Access policy simulator. Pure TypeScript evaluation engine with React visualization. Evaluates sign-in scenarios against CA policies with five visualization modes (Grid, Matrix, Sankey Flow, Gaps, Impact) and automated gap/impact analysis. Supports both sample data (21 demo policies, 5 personas) and live tenant connection via MSAL + Microsoft Graph API.
+Microsoft Entra ID Conditional Access policy simulator. TypeScript engine + React visualization. Connects to real tenants via MSAL + Graph API or runs in demo mode with sample data.
 
-## Commands
+## Tech Stack
 
-```bash
-npm run dev          # Vite dev server on http://localhost:5173
-npm run build        # Production build to dist/
-npm test             # Run all engine tests (Vitest)
-npm run test:watch   # Watch mode
-```
-
-Run a single test file:
-```bash
-npx vitest run src/engine/__tests__/conditions/UserConditionMatcher.test.ts
-```
+- **Language:** TypeScript strict mode
+- **Framework:** React 18 + Vite
+- **Testing:** Vitest (`npm test` runs all tests)
+- **UI:** Shadcn/UI (Radix primitives) + Tailwind CSS v4 (`@tailwindcss/vite` plugin, no tailwind.config.js)
+- **State:** Zustand (3 stores: usePolicyStore, usePersonaStore, useEvaluationStore). useEvaluationStore.activeView controls tab selection ('grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline'). usePersonaStore owns `personaSlots` — the guided real-account mapping shared by Gaps and Baseline; it lives in the store, not a view, so a mapping survives a tab switch, and `clear()` wipes it on logout and source switch.
+- **Auth:** MSAL.js (`@azure/msal-react`), loginRedirect flow
+- **Visualization:** D3 (d3-sankey, d3-selection) for Sankey diagram, CSS Grid for policy tiles
+- **Font:** JetBrains Mono (Google Fonts)
 
 ## Architecture
 
-Three strictly separated layers:
-
 ```
-Visualization Layer    React 18 + Shadcn/UI + D3 + Zustand stores
-Data Layer             MSAL auth, Graph API fetch, GUID resolution, normalization
-Engine Layer           Pure TypeScript, zero browser dependencies, fully testable
+src/
+  engine/              # Pure TypeScript, zero browser deps
+    models/            # Policy, SimulationContext, EvaluationResult, NamedLocations
+    conditions/        # 11 matchers (User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow, InsiderRisk, ClientApplications, AgentRisk)
+    PolicyEvaluator.ts # Single-policy evaluation, short-circuits on first failed condition
+    GrantControlResolver.ts  # Cross-policy AND resolution
+    SessionControlAggregator.ts  # Most-restrictive-wins merging
+    CAEngine.ts        # Top-level orchestrator (4-phase trace)
+  components/
+    layout/            # AppLayout, Header, Sidebar, MainContent
+    matrix/            # EvaluationMatrix, matrixUtils
+    sankey/            # SankeyFunnel, sankeyUtils
+    ui/                # Shadcn components
+    AboutDialog.tsx    # Info/privacy dialog
+    BaselineView.tsx   # Microsoft template baseline assessment tab
+    ConsentBanner.tsx  # 403 admin consent required banner
+    ExportChangesDialog.tsx # Change plan export (Summary/PowerShell/JSON)
+    GapsView.tsx       # Coverage gap analysis tab
+    ImpactView.tsx          # Policy impact analysis tab
+    LimitationsDialog.tsx   # Known limitations dialog
+    MobileNotice.tsx   # Narrow viewport notice overlay
+    PolicyGraph.tsx    # CSS Grid tile view
+    PersonaMappingPanel.tsx # Shared persona slot mapping (Gaps + Baseline)
+    PolicyDetailPanel.tsx   # Slide-in detail panel
+    ReleaseNotesDialog.tsx  # What's New dialog
+    ResultsSummary.tsx # Verdict + policy breakdown (live-vs-sandbox line)
+    ResultsTipsDialog.tsx   # Understanding Your Results dialog
+    SandboxAssignmentEditor.tsx  # Inline assignment editing (chips, add controls)
+    SandboxBar.tsx     # Sandbox mode bar + SandboxChip
+    SandboxDiffPanel.tsx    # Sandbox-vs-live sweep comparison panel
+    SandboxStateControl.tsx # On/Report/Off segmented control
+    ScoringMethodologyDialog.tsx  # Weighted scoring explanation dialog
+    ScenarioPanel.tsx  # Simulation controls sidebar
+    UserSearchInput.tsx     # Reusable user search component
+  stores/              # Zustand stores (usePolicyStore, usePersonaStore, useEvaluationStore — activeView includes 'impact')
+  services/            # graphService (policy fetch, tenant app discovery), personaService
+  lib/                 # deriveSatisfiedControls, gapAnalysis, gapPersonas, impactAnalysis, sweepDimensions, sandbox, sandboxDiff, sandboxExport, baselineAssessment, analytics
+  types/               # TenantApplication (app discovery type)
+  data/                # theme.ts (COLORS, APP_VERSION), appBundles (GUID-only bundle registry), baselineChecks (check catalog), templatePolicies (template policy bodies), samplePolicies, samplePersonas
+  authConfig.ts        # MSAL configuration
 ```
 
-### Engine Layer (`src/engine/`)
+## Key Commands
 
-Stateless, deterministic evaluation pipeline. Same inputs always produce same outputs. No DOM, no fetch, no React imports.
+```bash
+npm test          # Run all engine tests (723 tests, Vitest)
+npm run dev       # Start dev server (localhost:5173)
+npm run build     # Production build (Vite)
+```
 
-**4-phase pipeline:** Signal Collection → Policy Matching → Grant Resolution → Session Control Aggregation
+## Critical Rules
 
-- `CAEngine.ts` — Main orchestrator
-- `PolicyEvaluator.ts` — Single-policy evaluation (conditions AND'd, short-circuits on first failure)
-- `GrantControlResolver.ts` — Cross-policy grant resolution (always AND across policies)
-- `SessionControlAggregator.ts` — Most-restrictive-wins session control merging
-- `authenticationStrength.ts` — Hierarchy resolution for built-in authentication strengths (MFA < Passwordless MFA < Phishing-resistant MFA). Higher tiers satisfy lower requirements; custom strengths are never satisfied.
-- `conditions/` — 8 matchers: User, Application, DevicePlatform, Location, ClientApp, RiskLevel, DeviceFilter, AuthenticationFlow
+### Engine Accuracy
+- **Exclusion ALWAYS wins** over inclusion (user, group, role levels)
+- **Per-policy grant evaluation** — each policy's AND/OR operator is independent, cross-policy is always AND
+- **Block always wins** over any other grant control
+- **Report-only never enforces** — evaluated identically but separated from the decision
+- **No matching policies = implicit allow**
+- **Empty clientAppTypes = matches ALL**
+- **Risk levels use direct list membership** — no ordinal auto-escalation
+- **roleTemplateId** for directory roles, NOT instance id
+- **Agent identity isolation** — agent-identity sign-ins match ONLY via `clientApplications.includeAgentIdServicePrincipals` (users condition skipped); agent-targeting policies never apply to user/agent-user sign-ins; `All` and groups never match agent user accounts, only `AllAgentIdUsers` or direct id
+- **Policy list fetches the BETA Graph endpoint** — v1.0 strips agent targeting (verified live); fallback to v1.0 sets `agentDetailsUnavailable`
+- **Authentication strength is hierarchy-based** — MFA (1) < Passwordless MFA (2) < Phishing-resistant MFA (3); higher tiers satisfy lower requirements. Custom strengths resolve to a tier via `customAuthStrengthMap`; unknown strength IDs are never satisfied. Tier membership mirrors Microsoft's built-in strength table, NOT "is it password-free" — TAP and federated methods use no password but grade MFA-only.
+- **Device compliance and join type are independent** — the "Require Microsoft Entra hybrid joined device" grant control is satisfied by hybrid join ONLY; Entra joined and Entra registered do not satisfy it. Compliance requires an Entra device identity, so unregistered + compliant is an impossible state.
 
-**Data models** in `src/engine/models/` mirror `microsoft.graph.conditionalAccessPolicy` schema exactly. The Data Layer normalizes Graph API responses into these types — the engine never sees raw API data.
+### D3 ↔ React Boundary
+- React renders the `<svg>` container, D3 manages all SVG internals via `useEffect` + `useRef`
+- D3 never reads from or writes to React state directly
+- d3-sankey **mutates its input** — always deep-copy nodes/links before layout
 
-### Key Engine Rules
+### Tailwind v4
+- No `tailwind.config.js` — uses `@tailwindcss/vite` plugin
+- CSS vars mapped in `@theme inline` blocks in `src/index.css`
+- Color system: `src/data/theme.ts` (COLORS + CATEGORY_META + APP_VERSION) is the single source of truth
 
-- **Exclusion always wins over inclusion.** User in both included group AND excluded group → excluded.
-- **Unconfigured conditions match everything.** Missing platform condition = matches all platforms.
-- **Grant resolution is per-policy then cross-policy AND.** Each policy's OR/AND operator applies within, then ALL policies must be independently satisfied. Never aggregate controls across policies.
-- **Block in any policy → always block.**
-- **No matching enabled policies → implicit allow.**
-- **Report-only policies** go through the full pipeline but never affect the final decision.
-- **Authentication strength is hierarchy-based.** Built-in strengths have levels: MFA (1) < Passwordless MFA (2) < Phishing-resistant MFA (3). A user at level N satisfies any requirement at level ≤ N. Custom/unknown strengths are never satisfied. The `authenticationStrengthLevel` field on `SimulationContext` drives this resolution.
-- **roleTemplateId, not id** — Directory role matching must use `roleTemplateId` from Graph API, not the role instance `id`.
+### MSAL Auth
+- **loginRedirect** (NOT loginPopup — popup loads full SPA and never closes)
+- Use `accounts[0]` from `useMsal()` (reactive), NOT `instance.getActiveAccount()` (stale)
+- Instance created and initialized outside React component tree
+- Tenant name fetched on LOGIN_SUCCESS (main.tsx) + on page refresh (Header useEffect)
 
-### State Management (`src/stores/`)
+### Error Handling
+- Graph API 403 → `GraphPermissionError` → store error `'ADMIN_CONSENT_REQUIRED'` → `ConsentBanner` in MainContent
+- `ConsentBanner` includes dynamic admin consent URL, admin/non-admin guidance, and "Use Sample Data" fallback
+- Non-consent errors still display inline in ScenarioPanel
+- Console error statements log `err.message` only (not full error objects) to prevent tenant data leakage
 
-Three independent Zustand stores (no circular dependencies):
-- `usePolicyStore` — Policies, named locations, display names, data source (`'none' | 'live' | 'sample'`)
-- `useEvaluationStore` — Engine results, active view, selected policy, singleton CAEngine instance
-- `usePersonaStore` — Persona resolution cache, user search
+### Analytics
+- **Two transports, split by capability.** Page views go to Vercel Web Analytics via `<Analytics/>` in `main.tsx`; the nine product events POST to `/api/e`, an edge function (`api/e.ts`) relaying to a self-hosted Umami. Vercel Hobby supports no custom events, which is why the events collected nothing before v0.6.14.
+- **The Umami address is `process.env.UMAMI_URL`, never committed** — this repo is mirrored publicly, and a redaction step you must remember is a step you will eventually forget. Set it in Vercel for Production AND Preview; unset, `/api/e` returns 503 and events stop silently. `api/` is in `tsconfig.json` include, so the function typechecks locally.
+- The function forwards `User-Agent` and `X-Forwarded-For` deliberately: Umami drops requests without a UA, and without the client IP every visitor collapses into one hash — wrong counts rather than absent ones.
+- **No Umami tracker script is loaded.** `/api/send` accepts a plain POST with no auth token, so `analytics.ts` posts directly. Keeps `script-src 'self'`, gives autocapture no surface to exist on, and leaves an ad blocker looking at a same-origin path — which matters when the audience is security admins.
+- **Never add `referrer` to the Umami payload.** An internal wiki link puts `https://<customer>.sharepoint.com` in that field. It arrives as an HTTP header, so `isAllowed()` cannot see it — the allowlist guards props, not headers. Verified empty on the live instance; keep it that way.
+- Umami also accepts `screen`, `language`, `title` and the real `url`. All omitted; `url` is a constant `'/'`. A test asserts the payload has exactly four keys, so re-adding one fails rather than shipping quietly.
+- Country, browser and device ARE recorded — derived server-side from IP and user-agent, as any web server can. The IP itself is never stored (Umami has no column for it). Do not claim otherwise on the privacy page.
+- `src/lib/analytics.ts` is the ONLY module that may import `@vercel/analytics` or post to the event endpoint — every event goes through `trackEvent()`
+- Payloads are **enum-only**, enforced at runtime by `isAllowed()` (types don't exist at runtime; baseline check ids arrive as plain strings)
+- Props must match the allowlist exactly — an extra key is rejected, not ignored. Never send policy/app/group/user/tenant names, GUIDs, error messages, or counts (counts are tenant fingerprints)
+- `isAnalyticsEnabled()` requires a browser: the endpoint is a relative path that cannot resolve outside one, which would break store tests
+- DNT and the About-dialog opt-out both gate emission; `beforeSend` extends the same switch to Vercel's page views. Without it one opt-out would silence Umami while page views continued — a test asserts both stop together
+- The allowlist and `public/privacy/index.html` are a matched pair — changing one requires changing the other
+- `evaluate()` takes a REQUIRED `trigger` ('auto' | 'manual') so new call sites must declare intent — five paths exist and four are automatic
+- Never send verdicts, scenarios, or sweep findings — only that a run happened. `app_error` sends the kind, never the message (Graph/MSAL text names tenants)
 
-Auth handled by MSAL's `MsalProvider` + `useMsal()` hook (no separate store). Scenario form state is local `useState` in `ScenarioPanel`.
+### Security
+- `@odata.nextLink` URLs validated against `https://graph.microsoft.com/` before following with bearer token
+- 429 retry limited to 3 attempts (prevents infinite recursion)
+- User IDs validated as GUID format before Graph API path interpolation
+- All Zustand stores cleared before logout redirect
+- CSP: `frame-src 'self'` + `frame-ancestors 'self'` + `X-Frame-Options: SAMEORIGIN` for MSAL silent token renewal
+- HSTS header: `max-age=63072000; includeSubDomains; preload`
+- sessionStorage for MSAL token cache (not localStorage)
+- Source maps disabled in production builds
 
-### Visualization (`src/components/`)
+## Plan Mode Policy
 
-- **Grid** (`PolicyGraph.tsx`) — CSS Grid tiles, color-coded by inferred category
-- **Matrix** (`matrix/EvaluationMatrix.tsx`) — Diagnostic heatmap, conditions as columns, knockout highlighting
-- **Flow** (`sankey/SankeyFunnel.tsx`) — D3 Sankey diagram, 6 evaluation stages
-- **Gaps** (`GapsView.tsx`) — Brute-force coverage gap analysis across all scenario combinations
-- **Impact** (`ImpactView.tsx`) — Per-policy removal impact analysis with posture scoring
+**Plan mode required** for prompt packets that:
+- Touch 4 or more files
+- Introduce a new component, matcher, or view
+- Change the store schema
+- Modify the engine pipeline
 
-### Data Layer (`src/services/`)
+**Plan mode optional** for:
+- Bug fixes
+- Styling changes
+- Adding fields to existing components
+- Test additions for existing logic
 
-- `graphService.ts` — Single translation point from raw Graph API → engine models. Handles pagination, batch GUID resolution, named location fetching, full tenant app discovery (enterprise apps + app registrations).
-- `personaService.ts` — User search + transitive group/role membership resolution
-- `auth.ts` — MSAL instance creation + token acquisition
+## Source of Truth
 
-## Key Conventions
-
-- **Shadcn/UI for all standard UI elements.** Custom CSS only for D3 canvas and layout concerns.
-- **Dark theme only.** Colors from `src/data/theme.ts` (`COLORS` object) — single source of truth.
-- **Lucide React for icons.** No emojis in code.
-- **Tailwind CSS v4** via `@tailwindcss/vite` plugin (no tailwind.config.js or postcss.config.js). Theme variables in `@theme inline` blocks in `index.css`.
-- **D3 isolation** — D3 manages its own SVG internals, React owns everything outside. Deep-copy data before passing to d3-sankey layout (it mutates inputs).
-- **Path alias:** `@/` maps to `src/`
-- **TypeScript strict mode** throughout. No `any` types.
-- **Dual mode:** Sample vs live data distinguished by `dataSource` in policy store. Engine is mode-agnostic.
-- **App bundles** (`src/data/appBundles.ts`) — Office365 and MicrosoftAdminPortals expand to individual app GUIDs for matching.
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-57).
 
 ## Testing
 
-All 636 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Tests cover each condition matcher, policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, and impact analysis. Tests use real policy structures and contexts — no mocking of the engine.
+All 723 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
-## Environment
+## Impact Analysis Engine
 
-Copy `.env.example` to `.env` and set `VITE_MSAL_CLIENT_ID` for live tenant connection. Sample mode works without any configuration.
+`src/lib/impactAnalysis.ts` contains the impact analysis engine:
+- `analyzeImpactSweep()` — for each enabled policy, removes it and re-evaluates all 5,760 scenarios
+- `computePostureScore()` — weighted 0-10 score per scenario (block=10, authStrength=5, MFA=3, compliantDevice=3, appProtection=2)
+- `computeSeverity()` — Critical/High/Medium/Low based on verdict changes, affected scenarios, and fallback existence
+- `findFallbackPolicies()` — semantic control equivalence (authStrength↔MFA, compliantDevice↔domainJoined)
+- `findOtherProtection()` — remaining policies enforcing different controls
+- `describeFallback()` — contextual descriptions with policy scope
+- `describePolicyScope()` — extracts human-readable scope from policy conditions
+- Control weights are exported constants (`CONTROL_WEIGHTS`, `AUTH_STRENGTH_WEIGHT`)
+- Sweep dimensions from `src/lib/sweepDimensions.ts` — 3 user types × 3 apps × 5 platforms × 4 client apps × 2 locations × 4 risk × 4 user risk = 5,760 combinations
+- Agent grids (`buildAgentSweepContexts`): 3 apps × 2 locations × 4 agent risk per agent identity type (48 total) — parallel to the user sweep, NEVER merged into it (posture scoring is human-control-based; agent scenarios are block-or-allow). Used by sandboxDiff and impactAnalysis; agent protection loss (newlyAllowed > 0) escalates removal severity to critical
+
+## Sandbox (v0.5+)
+
+- Hypothetical state lives in usePolicyStore as deviations-only maps: `sandboxOverrides` (state), `sandboxAssignments` (per-field array replacements), `sandboxDrafts` (whole policies). The maps ARE the change list.
+- Derived `effectivePolicies` is the single choke point — every view/analysis reads it, NEVER `policies` directly (exception: ResultsSummary reads raw `policies` for the live-comparison line).
+- Engine is never modified by sandbox features; overrides apply before evaluation (`lib/sandbox.ts`).
+- Refresh prunes overrides (kept when live value changed underneath — intent, not 3-way merge); source switch/logout clears; Reset clears changes but stays in sandbox mode.
+- Diff: `lib/sandboxDiff.ts` compareSweeps (user sweep + parallel agent grids); export: `lib/sandboxExport.ts` (Graph PATCH/POST + PowerShell + Markdown, local only — the app NEVER writes to the tenant; agent-bearing policies route to the beta URI).
+
+## Baseline Assessment
+
+- `data/baselineChecks.ts` (21 checks, 6 categories incl. aiAgents) + `lib/baselineAssessment.ts` — OUTCOME-BASED: target scenarios must have the expected protection GUARANTEED (block satisfies everything; auth strength is tier-aware). An OR grant counts only if EVERY alternative satisfies the expectation — `[compliantDevice, domainJoinedDevice]` guarantees device trust, `[mfa, compliantDevice]` guarantees neither.
+- **Real personas run ALONGSIDE the synthetic ones** (`assessBaseline(policies, authStrengthMap, personas)`). The synthetic admin carries the GA role template id, no groups and no real object id, so nothing can exclude it — a policy that guarantees the control but excludes real admins passed 120/120 while the actual GA was uncovered. Class is derived from the account (`classifyPersona`), not the slot it sits in. Break-glass and service accounts are evaluated but partitioned out of the arithmetic entirely.
+- Statuses: pass / reportOnly (promoting report-only policies would fix it) / partial / fail. Licensing unknowable → P2/Purview checks fail honestly with badges.
+- `data/templatePolicies.ts` — Fix-in-sandbox template bodies; self-test loop: every template must satisfy its own check (`data/__tests__/templatePolicies.test.ts`).
+- Agent checks sweep synthetic agent contexts (no personas, no device platform).
+
+## Conventions
+
+- Use Shadcn/UI components for standard UI elements — no custom CSS for buttons, inputs, cards, etc.
+- Dark theme only. Colors from `COLORS` object in `data/theme.ts`.
+- 8 policy categories: Identity (purple), Security (red), Device (cyan), Location (orange), Risk (pink), App Protection (violet), Session (teal), Agents (lime).
+- Stores are independent — no circular imports between stores.
+- Sample/demo mode uses `dataSource` discriminator in usePolicyStore ('none' | 'live' | 'sample').
+
+## Git Workflow
+
+### Branch Strategy
+
+- **`main`** — Sacred. Always deployable to production. Never commit directly.
+- **`dev`** — Integration branch. All work merges here first for testing before promoting to `main`.
+- **Feature branches** — Short-lived, branched from `dev`, named by version and feature:
+  ```
+  feature/v{version}-{feature-name}
+  ```
+  Examples: `feature/v033-session-controls`, `feature/v033-auth-strength`, `feature/v04-byoar`
+
+### Workflow
+
+1. Start work: `git checkout dev && git pull && git checkout -b feature/v033-my-feature`
+2. Do work on the feature branch, commit frequently with descriptive messages
+3. When done: merge feature branch → `dev`, test, then delete the feature branch
+4. When `dev` is stable and tested: merge `dev` → `main`, tag the release
+
+### Commit Messages
+
+Use conventional commits:
+- `feat:` — new feature or capability
+- `fix:` — bug fix
+- `security:` — security hardening
+- `refactor:` — code restructuring without behavior change
+- `test:` — adding or updating tests
+- `docs:` — documentation only
+- `chore:` — build, deps, config changes
+
+### Rules
+
+- **Never force-push to `main` or `dev`**
+- **Delete feature branches after merge** — don't leave stale branches
+- **Always run `npm test` before merging to `dev`**
+- **Tag releases on `main`** with `v{version}` (e.g., `v0.3.3`)

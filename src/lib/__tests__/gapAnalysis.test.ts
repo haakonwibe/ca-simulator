@@ -356,6 +356,32 @@ describe('analyzeGaps', () => {
       expect(cautionGaps.length).toBe(0);
     });
 
+    it('hybrid-join-only policy counts as device trust, same as compliantDevice', () => {
+      const policy = createPolicy({
+        grantControls: { operator: 'OR', builtInControls: ['domainJoinedDevice'] },
+      });
+
+      const gaps = analyzeGaps([policy]);
+      const noDeviceGaps = gaps.filter((g) => g.gapType === 'no-device-compliance');
+      const cautionGaps = gaps.filter((g) => g.gapType === 'no-mfa-or-device');
+
+      expect(noDeviceGaps.length).toBe(0);
+      expect(cautionGaps.length).toBe(0);
+      expect(gaps.filter((g) => g.gapType === 'no-mfa').length).toBe(TOTAL_SCENARIOS);
+    });
+
+    it('OR grant of compliantDevice or hybrid join guarantees device trust', () => {
+      const policy = createPolicy({
+        grantControls: { operator: 'OR', builtInControls: ['compliantDevice', 'domainJoinedDevice'] },
+      });
+
+      const gaps = analyzeGaps([policy]);
+
+      // Every alternative is a device-trust control, so device trust is guaranteed
+      expect(gaps.filter((g) => g.gapType === 'no-device-compliance').length).toBe(0);
+      expect(gaps.filter((g) => g.gapType === 'no-mfa-or-device').length).toBe(0);
+    });
+
     it('policy requiring both MFA and compliantDevice produces only legacy gaps', () => {
       const policy = createPolicy({
         grantControls: { operator: 'AND', builtInControls: ['mfa', 'compliantDevice'] },

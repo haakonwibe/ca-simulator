@@ -118,10 +118,22 @@ function classifyResult(
   // "mfa OR compliantDevice" guarantees neither individually.
   const { guaranteed, alternativeSets } = deriveGuaranteedControls(appliedPolicies);
   const satisfiesMfa = (c: string) => c === 'mfa' || c.startsWith('authenticationStrength:');
-  const satisfiesDevice = (c: string) => c === 'compliantDevice';
+  // Device trust is compliant OR hybrid joined — both prove the device is known and
+  // managed, which is why controlCategory() groups them and why Microsoft's own
+  // template is "compliant or hybrid joined device". Counting only compliantDevice
+  // here reported a device gap against tenants that require hybrid join.
+  const satisfiesDevice = (c: string) => c === 'compliantDevice' || c === 'domainJoinedDevice';
 
-  const hasMfa = [...guaranteed].some(satisfiesMfa);
-  const hasCompliantDevice = [...guaranteed].some(satisfiesDevice);
+  // A control is guaranteed when it is required outright, OR when every alternative
+  // of an OR grant satisfies it — "compliant OR hybrid joined device" is the shape
+  // Microsoft's own device-trust templates use, and it guarantees device trust even
+  // though neither control alone is mandatory. Same rule the baseline assessment uses.
+  const guaranteedControls = [...guaranteed];
+  const isGuaranteed = (pred: (c: string) => boolean) =>
+    guaranteedControls.some(pred) || alternativeSets.some(set => set.every(pred));
+
+  const hasMfa = isGuaranteed(satisfiesMfa);
+  const hasCompliantDevice = isGuaranteed(satisfiesDevice);
   const mfaIsAlternative = !hasMfa && alternativeSets.some(set => set.some(satisfiesMfa));
   const deviceIsAlternative = !hasCompliantDevice && alternativeSets.some(set => set.some(satisfiesDevice));
   // An OR set where EVERY alternative is mfa-or-device still guarantees "one of the two"
@@ -149,8 +161,8 @@ function classifyResult(
       severity: 'warning',
       gapType: 'no-device-compliance',
       reason: deviceIsAlternative
-        ? 'Device compliance not guaranteed — it is only one alternative in an OR grant; a sign-in can complete without a compliant device'
-        : 'No compliant device required — policies apply but none enforce device compliance',
+        ? 'Device trust not guaranteed — it is only one alternative in an OR grant; a sign-in can complete without a compliant or hybrid joined device'
+        : 'No device trust required — policies apply but none require a compliant or hybrid joined device',
     });
   }
 
@@ -159,7 +171,7 @@ function classifyResult(
     classifications.push({
       severity: 'caution',
       gapType: 'no-mfa-or-device',
-      reason: 'Neither MFA nor compliant device required — minimal security posture',
+      reason: 'Neither MFA nor device trust required — minimal security posture',
     });
   }
 

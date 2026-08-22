@@ -4,6 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS } from '@/data/theme';
 import { analyzeImpactSweep } from '@/lib/impactAnalysis';
+import { trackEvent, type EventTrigger } from '@/lib/analytics';
 import type {
   ImpactSweepResult,
   ImpactSeverity,
@@ -446,7 +447,9 @@ export function ImpactView() {
 
   const lastAnalyzedPoliciesRef = useRef<typeof policies | null>(null);
 
-  const runAnalysis = useCallback(() => {
+  const runAnalysis = useCallback((trigger: EventTrigger) => {
+    // Impact has no persona dimension — the sweep is fixed.
+    trackEvent({ name: 'analysis_run', props: { view: 'impact', trigger, personas: 'not_applicable' } });
     setIsAnalyzing(true);
     setSelectedPolicyId(null);
     setTimeout(() => {
@@ -468,7 +471,7 @@ export function ImpactView() {
       lastAnalyzedPoliciesRef.current !== policies &&
       policies.length > 0
     ) {
-      runAnalysis();
+      runAnalysis('auto');
     }
   }, [policies, runAnalysis]);
 
@@ -496,7 +499,7 @@ export function ImpactView() {
           {SWEEP_SCENARIO_COUNT.toLocaleString()} scenario combinations
         </p>
         <Button
-          onClick={runAnalysis}
+          onClick={() => runAnalysis('manual')}
           className="gap-2"
           style={{ backgroundColor: COLORS.accent }}
         >
@@ -539,7 +542,7 @@ export function ImpactView() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={runAnalysis}
+              onClick={() => runAnalysis('manual')}
               className="h-6 px-2 text-[10px]"
               style={{ color: COLORS.textMuted }}
             >
