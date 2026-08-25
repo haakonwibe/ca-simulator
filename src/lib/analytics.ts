@@ -71,7 +71,8 @@ export type AppEvent =
         personas: 'generic' | 'selected' | 'resolved' | 'not_applicable';
       };
     }
-  | { name: 'app_error'; props: { source: 'uncaught' | 'promise' } };
+  | { name: 'app_error'; props: { source: 'uncaught' | 'promise' } }
+  | { name: 'tour'; props: { step: 'started' | 'completed' | 'dismissed' } };
 
 const MODES = ['live', 'sample'] as const;
 const VIEWS = ['grid', 'matrix', 'sankey', 'gaps', 'impact', 'baseline'] as const;
@@ -83,6 +84,7 @@ const TRIGGERS = ['auto', 'manual'] as const;
 const ANALYSIS_VIEWS = ['gaps', 'impact'] as const;
 const PERSONA_SOURCES = ['generic', 'selected', 'resolved', 'not_applicable'] as const;
 const ERROR_SOURCES = ['uncaught', 'promise'] as const;
+const TOUR_STEPS_EMITTED = ['started', 'completed', 'dismissed'] as const;
 
 /** Check ids come from the catalog, so adding a check can't break the button. */
 const BASELINE_CHECK_IDS: readonly string[] = BASELINE_CHECKS.map((c) => c.id);
@@ -102,6 +104,7 @@ export const ALLOWED: Readonly<Record<string, Readonly<Record<string, readonly s
   evaluated: { mode: MODES, trigger: TRIGGERS },
   analysis_run: { view: ANALYSIS_VIEWS, trigger: TRIGGERS, personas: PERSONA_SOURCES },
   app_error: { source: ERROR_SOURCES },
+  tour: { step: TOUR_STEPS_EMITTED },
 };
 
 /**
@@ -127,10 +130,10 @@ export function isAllowed(name: string, props: Record<string, unknown>): boolean
 // --- Opt-out ----------------------------------------------------------------
 
 /**
- * The app's only localStorage key. A preference flag, not an identifier — it
- * holds the literal string 'true' and nothing else. Deliberately NOT cleared by
- * the logout store-clearing in useAuthStore: it is the user's choice, not
- * tenant data.
+ * One of the app's two localStorage keys (the other is the tour-seen flag in
+ * lib/tour.ts). A preference flag, not an identifier — it holds the literal
+ * string 'true' and nothing else. Deliberately NOT cleared by the logout
+ * store-clearing in useAuthStore: it is the user's choice, not tenant data.
  */
 export const ANALYTICS_OPT_OUT_KEY = 'ca-sim:analytics-opt-out';
 

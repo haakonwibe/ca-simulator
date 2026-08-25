@@ -19,9 +19,14 @@ import { LimitationsDialog } from '@/components/LimitationsDialog';
 import { ResultsTipsDialog } from '@/components/ResultsTipsDialog';
 import { ReleaseNotesDialog } from '@/components/ReleaseNotesDialog';
 import { AuthErrorBanner } from '@/components/AuthErrorBoundary';
-import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee, Beaker } from 'lucide-react';
+import { LogIn, LogOut, User, ChevronDown, FlaskConical, FileText, HelpCircle, AlertTriangle, Info, Loader2, Globe, Check, Github, Coffee, Beaker, Compass } from 'lucide-react';
 
-export function Header() {
+interface HeaderProps {
+  /** Replays the guided tour — the tour itself lives in AppLayout. */
+  onStartTour: () => void;
+}
+
+export function Header({ onStartTour }: HeaderProps) {
   const accounts = useAuthStore((s) => s.accounts);
   const isAuthenticated = useAuthStore((s) => s.isAuthenticated);
   const login = useAuthStore((s) => s.login);
@@ -144,6 +149,16 @@ export function Header() {
         >
           <AlertTriangle className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
         </Button>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="h-7 w-7 p-0"
+          onClick={onStartTour}
+          title="Take the tour"
+          aria-label="Take the tour"
+        >
+          <Compass className="h-3.5 w-3.5" style={{ color: COLORS.textMuted }} />
+        </Button>
         <a
           href="https://buymeacoffee.com/haakonwibe"
           target="_blank"
@@ -160,7 +175,7 @@ export function Header() {
       <div className="flex items-center">
         <DropdownMenu>
           <DropdownMenuTrigger asChild disabled={isLoading}>
-            <button className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-normal transition-colors hover:bg-accent/50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
+            <button data-tour="data-source" className="inline-flex items-center gap-1.5 rounded-md border px-2.5 py-1 text-xs font-normal transition-colors hover:bg-accent/50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer"
               style={{ borderColor: dataSource === 'sample' ? COLORS.accentLightFaded : COLORS.border }}
             >
               {isLoading ? (
@@ -200,7 +215,7 @@ export function Header() {
 
         {/* Sandbox mode switch — only meaningful once policies are loaded */}
         {dataSource !== 'none' && (
-          <div className="ml-3 flex items-center gap-1.5">
+          <div data-tour="sandbox" className="ml-3 flex items-center gap-1.5">
             <Switch
               id="sandbox-switch"
               checked={sandboxActive}

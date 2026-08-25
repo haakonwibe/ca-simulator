@@ -19,8 +19,9 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 - **Coverage gap analysis** — brute-force sweep across platforms, client apps, locations, and risk levels to find unprotected scenarios
 - **Tenant app discovery** — Application dropdown shows all enterprise apps and app registrations from your tenant, not just policy-referenced apps
 - **Precise scenario modelling** — device compliance and join type as independent controls (Entra joined, hybrid joined, registered, unregistered), authentication strength tiered against Microsoft's built-in strength definitions, and every scenario option described in place
-- **Deterministic engine** matching Microsoft's What If tool — 701 unit tests verify accuracy
+- **Deterministic engine** matching Microsoft's What If tool — 741 unit tests verify accuracy
 - **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow, InsiderRisk, ClientApplications (agents), AgentRisk
+- **Guided tour** — on a first visit, coach marks introduce each part of the interface in turn: where to load policies, where to describe a sign-in, and what sits behind each of the six tabs. Replayable at any time from the header
 - **Sample mode** for instant demo — 22 policies and 5 personas, no Azure tenant required
 - **Live tenant connection** via MSAL + Microsoft Graph API
 - **Graceful permission handling** — friendly admin consent banner when tenant permissions are missing

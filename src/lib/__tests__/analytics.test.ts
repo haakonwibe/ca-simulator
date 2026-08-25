@@ -214,6 +214,15 @@ describe('trackEvent', () => {
     expect(sent().filter(([, p]) => p.step === 'changed')).toHaveLength(2);
   });
 
+  it('separates a finished tour from one that was closed early', () => {
+    // Whether the tour helps or gets shut instantly is the only question it
+    // needs to answer, so both outcomes must be distinguishable.
+    trackEvent({ name: 'tour', props: { step: 'started' } });
+    trackEvent({ name: 'tour', props: { step: 'dismissed' } });
+    trackEvent({ name: 'tour', props: { step: 'completed' } });
+    expect(sent().map(([, p]) => p.step)).toEqual(['started', 'dismissed', 'completed']);
+  });
+
   it('sends the evaluate trigger so auto and manual runs stay separable', () => {
     trackEvent({ name: 'evaluated', props: { mode: 'sample', trigger: 'auto' } });
     trackEvent({ name: 'evaluated', props: { mode: 'sample', trigger: 'manual' } });

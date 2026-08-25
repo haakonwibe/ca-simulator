@@ -51,10 +51,11 @@ src/
     SandboxStateControl.tsx # On/Report/Off segmented control
     ScoringMethodologyDialog.tsx  # Weighted scoring explanation dialog
     ScenarioPanel.tsx  # Simulation controls sidebar
+    TourGuide.tsx      # First-run guided tour overlay (data-tour anchors)
     UserSearchInput.tsx     # Reusable user search component
   stores/              # Zustand stores (usePolicyStore, usePersonaStore, useEvaluationStore — activeView includes 'impact')
   services/            # graphService (policy fetch, tenant app discovery), personaService
-  lib/                 # deriveSatisfiedControls, gapAnalysis, gapPersonas, impactAnalysis, sweepDimensions, sandbox, sandboxDiff, sandboxExport, baselineAssessment, analytics
+  lib/                 # deriveSatisfiedControls, gapAnalysis, gapPersonas, impactAnalysis, sweepDimensions, sandbox, sandboxDiff, sandboxExport, baselineAssessment, analytics, tour
   types/               # TenantApplication (app discovery type)
   data/                # theme.ts (COLORS, APP_VERSION), appBundles (GUID-only bundle registry), baselineChecks (check catalog), templatePolicies (template policy bodies), samplePolicies, samplePersonas
   authConfig.ts        # MSAL configuration
@@ -63,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (723 tests, Vitest)
+npm test          # Run all engine tests (741 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -107,7 +108,7 @@ npm run build     # Production build (Vite)
 - Console error statements log `err.message` only (not full error objects) to prevent tenant data leakage
 
 ### Analytics
-- **Two transports, split by capability.** Page views go to Vercel Web Analytics via `<Analytics/>` in `main.tsx`; the nine product events POST to `/api/e`, an edge function (`api/e.ts`) relaying to a self-hosted Umami. Vercel Hobby supports no custom events, which is why the events collected nothing before v0.6.14.
+- **Two transports, split by capability.** Page views go to Vercel Web Analytics via `<Analytics/>` in `main.tsx`; the ten product events POST to `/api/e`, an edge function (`api/e.ts`) relaying to a self-hosted Umami. Vercel Hobby supports no custom events, which is why the events collected nothing before v0.6.14.
 - **The Umami address is `process.env.UMAMI_URL`, never committed** — this repo is mirrored publicly, and a redaction step you must remember is a step you will eventually forget. Set it in Vercel for Production AND Preview; unset, `/api/e` returns 503 and events stop silently. `api/` is in `tsconfig.json` include, so the function typechecks locally.
 - The function forwards `User-Agent` and `X-Forwarded-For` deliberately: Umami drops requests without a UA, and without the client IP every visitor collapses into one hash — wrong counts rather than absent ones.
 - **No Umami tracker script is loaded.** `/api/send` accepts a plain POST with no auth token, so `analytics.ts` posts directly. Keeps `script-src 'self'`, gives autocapture no surface to exist on, and leaves an ad blocker looking at a same-origin path — which matters when the audience is security admins.
@@ -149,11 +150,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-57).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-60).
 
 ## Testing
 
-All 723 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 741 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 
@@ -184,6 +185,14 @@ All 723 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/service
 - Statuses: pass / reportOnly (promoting report-only policies would fix it) / partial / fail. Licensing unknowable → P2/Purview checks fail honestly with badges.
 - `data/templatePolicies.ts` — Fix-in-sandbox template bodies; self-test loop: every template must satisfy its own check (`data/__tests__/templatePolicies.test.ts`).
 - Agent checks sweep synthetic agent contexts (no personas, no device platform).
+
+## Guided Tour (v0.6.16)
+
+- `lib/tour.ts` (steps + seen flag + `positionBubble` geometry) + `components/TourGuide.tsx` (overlay). Nine stops: data source, Simulation Context, the six tabs, sandbox switch.
+- **Points and explains — never clicks.** No store is touched, no view switched, no evaluation run, so it behaves identically before and after data loads.
+- Targets carry a `data-tour="..."` attribute; steps whose anchor doesn't resolve are dropped when the tour opens. `findAnchor` checks `getClientRects().length`, NOT just presence — the sidebar is hidden with `display: none`, not unmounted.
+- Auto-starts once per browser (`ca-sim:tour-seen`, the app's second and only other localStorage key), gated to ≥768px so it can't collide with `MobileNotice`. The header compass button replays it.
+- Only the geometry is tested — this project has no component tests.
 
 ## Conventions
 

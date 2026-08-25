@@ -6,10 +6,12 @@ import { MobileNotice } from '@/components/MobileNotice';
 import { SandboxBar } from '@/components/SandboxBar';
 import { SandboxDiffPanel } from '@/components/SandboxDiffPanel';
 import { ExportChangesDialog } from '@/components/ExportChangesDialog';
+import { TourGuide } from '@/components/TourGuide';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS, APP_VERSION } from '@/data/theme';
 import { trackEvent } from '@/lib/analytics';
+import { hasSeenTour, TOUR_MIN_WIDTH } from '@/lib/tour';
 
 export function AppLayout() {
   const activeView = useEvaluationStore((s) => s.activeView);
@@ -18,6 +20,18 @@ export function AppLayout() {
   const sandboxActive = usePolicyStore((s) => s.sandboxActive);
   const [diffOpen, setDiffOpen] = useState(false);
   const [exportOpen, setExportOpen] = useState(false);
+  const [tourOpen, setTourOpen] = useState(false);
+
+  // Greet a first-time visitor, once. Gated on the same 768px breakpoint as
+  // MobileNotice: below it that overlay owns the screen, and the sidebar the
+  // tour points at is off-screen anyway.
+  useEffect(() => {
+    if (hasSeenTour()) return;
+    if (!window.matchMedia(`(min-width: ${TOUR_MIN_WIDTH}px)`).matches) return;
+    // One frame, so the layout the tour measures is the one that got painted.
+    const timer = setTimeout(() => setTourOpen(true), 0);
+    return () => clearTimeout(timer);
+  }, []);
 
   // Leaving sandbox mode closes the comparison panel and export dialog
   useEffect(() => {
@@ -30,7 +44,7 @@ export function AppLayout() {
   return (
     <div className="flex h-screen flex-col overflow-hidden">
       <MobileNotice />
-      <Header />
+      <Header onStartTour={() => setTourOpen(true)} />
       <SandboxBar
         onViewDiff={() => {
           trackEvent({ name: 'sandbox', props: { step: 'diffed' } });
@@ -40,6 +54,7 @@ export function AppLayout() {
       />
       <SandboxDiffPanel open={diffOpen} onClose={() => setDiffOpen(false)} />
       <ExportChangesDialog open={exportOpen} onOpenChange={setExportOpen} />
+      <TourGuide open={tourOpen} onClose={() => setTourOpen(false)} />
       <div className="flex flex-1 overflow-hidden">
         {/* Hide (not unmount) for full-area views — ScenarioPanel's form state
             is local useState and must survive switching to Gaps/Impact */}

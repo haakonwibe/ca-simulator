@@ -20,7 +20,7 @@ export const config = { runtime: 'edge' };
 // this. Declaring the shape locally beats pulling in the whole Node surface.
 declare const process: { env: Record<string, string | undefined> };
 
-/** Nine enum-only events; none comes close. Anything larger is not ours. */
+/** Ten enum-only events; none comes close. Anything larger is not ours. */
 const MAX_BODY_BYTES = 2048;
 
 export default async function handler(request: Request): Promise<Response> {

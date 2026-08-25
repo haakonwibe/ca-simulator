@@ -48,6 +48,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'grid' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('grid')}
+          data-tour="tab-grid"
         >
           <LayoutGrid className="h-3.5 w-3.5" />
           Grid
@@ -57,6 +58,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'matrix' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('matrix')}
+          data-tour="tab-matrix"
         >
           <List className="h-3.5 w-3.5" />
           Matrix
@@ -66,6 +68,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'sankey' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('sankey')}
+          data-tour="tab-sankey"
         >
           <GitBranch className="h-3.5 w-3.5" />
           Flow
@@ -75,6 +78,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'gaps' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('gaps')}
+          data-tour="tab-gaps"
         >
           <ShieldAlert className="h-3.5 w-3.5" />
           Gaps
@@ -84,6 +88,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'impact' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('impact')}
+          data-tour="tab-impact"
         >
           <Zap className="h-3.5 w-3.5" />
           Impact
@@ -93,6 +98,7 @@ export function MainContent() {
           size="sm"
           className={`h-7 gap-1.5 px-2.5 text-xs ${activeView === 'baseline' ? 'bg-accent text-accent-foreground' : 'text-muted-foreground'}`}
           onClick={() => openView('baseline')}
+          data-tour="tab-baseline"
         >
           <ClipboardCheck className="h-3.5 w-3.5" />
           Baseline

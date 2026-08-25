@@ -17,6 +17,20 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.16',
+    subtitle: 'Guided Tour',
+    features: [
+      {
+        heading: 'A Tour on Your First Visit',
+        body: 'The app now introduces itself. On a first visit, small bubbles appear over each part of the interface in turn — where to load your policies, where to describe a sign-in, and what sits behind each of the six tabs — so the tool can be understood without reading anything first. It points and explains rather than clicking: your view, your scenario, and your data are left exactly as they were.',
+      },
+      {
+        heading: 'Available Whenever You Want It',
+        body: 'The tour appears once and then stays out of the way. The compass button in the header replays it at any time, and it adapts to what is on screen — a step whose subject is not currently visible is skipped rather than pointing at nothing.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.14',
     subtitle: 'Baseline Accuracy',
     features: [

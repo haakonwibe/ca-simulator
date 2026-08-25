@@ -79,6 +79,7 @@
       <li><code>evaluated</code> &mdash; that a simulation ran, in sample or live mode, and whether you clicked Evaluate or the app ran it for you. Never the scenario you configured and never the verdict</li>
       <li><code>analysis_run</code> &mdash; that a Gaps or Impact sweep ran, and for Gaps which persona mode it used. Never the findings</li>
       <li><code>app_error</code> &mdash; that the app hit an uncaught error or a failed promise, so crashes are not invisible to us. The kind only &mdash; never the message, the stack, or the file</li>
+      <li><code>tour</code> &mdash; that the first-run guided tour started, and whether you finished it or closed it early. Not which step you were on</li>
     </ul>
     <p>Every value in those events comes from a fixed list written into the app's source code and checked again before each event is sent. Policy names, user or group names, application names, tenant names, GUIDs, error messages, and counts of any kind are never sent, and cannot be: an event carrying anything outside the list is discarded rather than transmitted.</p>
     <p>In particular, we record <em>that</em> you ran a simulation or a sweep, never what was in it. The scenario you configure and the verdict you get back stay in your browser, as does everything the Gaps, Impact, and Baseline tabs compute.</p>
@@ -94,7 +95,8 @@
 
     <h2>Your Choices</h2>
     <p>Page views and usage events are both switched off entirely if your browser sends a <strong>Do Not Track</strong> signal &mdash; no setting in the app can override that. You can also turn them off yourself: open the <strong>About</strong> dialog and switch off &ldquo;Send anonymous usage events&rdquo;. One switch covers both; neither can be left running while the other is off. With either in force, usage events are never sent at all &mdash; the request is not made, rather than made and discarded.</p>
-    <p>That preference is kept in a single browser <code>localStorage</code> entry (<code>ca-sim:analytics-opt-out</code>) holding the word <code>true</code>. It is a preference flag, not an identifier &mdash; it contains nothing about you, is never sent anywhere, and is the only thing this app stores outside the sign-in session.</p>
+    <p>That preference is kept in a browser <code>localStorage</code> entry (<code>ca-sim:analytics-opt-out</code>) holding the word <code>true</code>. It is a preference flag, not an identifier &mdash; it contains nothing about you and is never sent anywhere.</p>
+    <p>One other entry exists, and these two are the whole of what this app stores outside the sign-in session: <code>ca-sim:tour-seen</code>, also holding the word <code>true</code>, which is how the guided tour knows not to greet you a second time. It likewise contains nothing about you and is never sent anywhere.</p>
 
     <h2>Sample Mode</h2>
     <p>Sample mode uses hardcoded demo data. No authentication or API calls are made. No data leaves your browser.</p>
