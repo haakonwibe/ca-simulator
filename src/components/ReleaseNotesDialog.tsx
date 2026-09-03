@@ -21,12 +21,20 @@ const RELEASES: ReleaseVersion[] = [
     subtitle: 'Microsoft services',
     features: [
       {
-        heading: 'Simulate the Resources a Policy Cannot Name',
-        body: 'A policy that blocks everything except a named list of apps will still block things, because some resources are never in that list. Microsoft Graph is the clearest case: it is an umbrella resource, the portal refuses to add it to either list, and a sign-in that lands on it therefore matches the All-resources rule no matter how long the exclusion list is. The Simulation Context now offers a Microsoft services group — Graph, Azure AD Graph, My Sign-ins, My Apps, My Profile, the App Access Panel and more — none of which appear in tenant app discovery because Microsoft owns them. Choosing one that no policy can name shows the reason alongside the verdict. There is also a field for any application identifier copied straight from a sign-in log, and the sandbox offers only resources a policy can genuinely target, so a suggested fix is never one the portal would reject.',
+        heading: 'Microsoft Services in the Simulator',
+        body: 'Tenant discovery hides Microsoft-owned services, yet they are what sign-in logs name when an allowlist blocks something unexpected. Microsoft Graph, Azure AD Graph, My Sign-ins, My Apps and My Profile can now be selected, along with any application ID pasted from a log.',
       },
       {
-        heading: 'Returning After a Long Break',
-        body: 'Coming back to a tab left open overnight could end in a raw authentication error rather than a sign-in prompt. When the session behind it has lapsed, the silent renewal has nothing to renew and simply times out. That case is now treated the same as any other expired session, so it takes you to sign in.',
+        heading: 'Baseline Scopes',
+        body: 'Microsoft is removing the exemption that let sign-ins requesting only baseline scopes bypass an All-resources policy carrying exclusions; those sign-ins are now evaluated against Azure AD Graph. The simulator has always worked that way. Resources a policy cannot name are tagged, with the reason shown on the verdict.',
+      },
+      {
+        heading: 'Notes on the Sample Policies',
+        body: 'In demo mode, several sample policies now carry a short note on what they demonstrate and one thing to try. The sample tenant was always built to teach, and now it says so.',
+      },
+      {
+        heading: 'Refinements',
+        body: 'Sign-in renewal is more reliable after a tab has been left open for a long time. The resource picker groups Microsoft services separately, marks the ones a policy cannot name, and points between a resource and the matching user action.',
       },
     ],
   },
@@ -40,11 +48,11 @@ const RELEASES: ReleaseVersion[] = [
       },
       {
         heading: 'A Baseline Check for Support Sessions',
-        body: 'Microsoft’s deployment guidance is to exclude Remote Help from Conditional Access, which is sound advice for device requirements — the person whose device has fallen out of compliance is exactly the person who needs help — but it is easy to apply more widely than intended. A new Baseline check reports whether multifactor authentication still reaches Remote Help, so an exclusion made for one reason does not quietly remove every control. Fix in sandbox drafts the policy that closes it.',
+        body: 'Microsoft advises excluding Remote Help from Conditional Access, which is right for device requirements: the person whose device has fallen out of compliance is the one who needs help. A new Baseline check reports whether multifactor authentication still reaches it, so an exclusion made for one reason does not remove every control.',
       },
       {
         heading: 'A Check for Remote Help Operators',
-        body: 'Microsoft’s planning guidance puts Conditional Access in front of helper accounts, because a helper holds elevated access to other people’s devices. No synthetic persona can stand in for one: helper status is an Intune role assignment that nothing in Entra exposes, and demanding a compliant device and phishing-resistant MFA from every member on Remote Help would lock non-compliant sharers out. A sixth persona slot, Remote Help Operator, takes a real helpdesk account, and a new Baseline check verifies that account reaches Remote Help only from a compliant device with phishing-resistant MFA. Until an account is mapped the check reads Needs mapping rather than pretending either way. Fix in sandbox drafts a policy scoped to the mapped account, to be widened to the operators group before deploying. Both Remote Help checks sweep Windows and macOS, the platforms Microsoft supports Conditional Access for Remote Help on. Sample data gains Morgan Helpdesk and the matching operator policy.',
+        body: 'Helpers hold elevated access to other people’s devices, so Microsoft recommends Conditional Access in front of their accounts. Helper status is an Intune role assignment that nothing in Entra exposes, so a new persona slot takes a real helpdesk account and the check verifies it reaches Remote Help only from a compliant device with phishing-resistant MFA.',
       },
     ],
   },
@@ -302,11 +310,11 @@ const RELEASES: ReleaseVersion[] = [
     features: [
       {
         heading: 'Sankey Diagram Sizing',
-        body: 'Fixed an issue where the Sankey diagram could render with incorrect dimensions on first display, requiring a tab switch to correct itself.',
+        body: 'The Sankey diagram sizes correctly on first display and adapts as the window changes.',
       },
       {
         heading: 'Other Fixes & Improvements',
-        body: 'Improved silent token renewal reliability, fixed a failing Graph API call for app registrations, and general infrastructure hardening.',
+        body: 'More reliable silent token renewal, more complete app registration discovery, and general infrastructure hardening.',
       },
     ],
   },
@@ -392,7 +400,7 @@ const RELEASES: ReleaseVersion[] = [
       },
       {
         heading: 'Authentication Stability',
-        body: 'Fixed a race condition in authentication initialization that could require signing in twice. The login event listener now registers before checking account state.',
+        body: 'Authentication initialization is more reliable, so signing in completes on the first attempt.',
       },
       {
         heading: 'Smarter API Retries',
