@@ -10,7 +10,7 @@ Microsoft Entra ID Conditional Access policy simulator. TypeScript engine + Reac
 - **Framework:** React 18 + Vite
 - **Testing:** Vitest (`npm test` runs all tests)
 - **UI:** Shadcn/UI (Radix primitives) + Tailwind CSS v4 (`@tailwindcss/vite` plugin, no tailwind.config.js)
-- **State:** Zustand (3 stores: usePolicyStore, usePersonaStore, useEvaluationStore). useEvaluationStore.activeView controls tab selection ('grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline'). usePersonaStore owns `personaSlots` — the guided real-account mapping shared by Gaps and Baseline; it lives in the store, not a view, so a mapping survives a tab switch, and `clear()` wipes it on logout and source switch.
+- **State:** Zustand (3 stores: usePolicyStore, usePersonaStore, useEvaluationStore). useEvaluationStore.activeView controls tab selection ('grid' | 'matrix' | 'sankey' | 'gaps' | 'impact' | 'baseline'). usePersonaStore owns `personaSlots` — the guided real-account mapping shared by Gaps and Baseline (six slots; the sixth, Remote Help Operator, is a *role* slot the classifier cannot derive); it lives in the store, not a view, so a mapping survives a tab switch, and `clear()` wipes it on logout and source switch.
 - **Auth:** MSAL.js (`@azure/msal-react`), loginRedirect flow
 - **Visualization:** D3 (d3-sankey, d3-selection) for Sankey diagram, CSS Grid for policy tiles
 - **Font:** JetBrains Mono (Google Fonts)
@@ -64,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (741 tests, Vitest)
+npm test          # Run all engine tests (766 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -150,11 +150,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-60).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-65).
 
 ## Testing
 
-All 741 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 766 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 
@@ -180,10 +180,11 @@ All 741 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/service
 
 ## Baseline Assessment
 
-- `data/baselineChecks.ts` (21 checks, 6 categories incl. aiAgents) + `lib/baselineAssessment.ts` — OUTCOME-BASED: target scenarios must have the expected protection GUARANTEED (block satisfies everything; auth strength is tier-aware). An OR grant counts only if EVERY alternative satisfies the expectation — `[compliantDevice, domainJoinedDevice]` guarantees device trust, `[mfa, compliantDevice]` guarantees neither.
+- `data/baselineChecks.ts` (23 checks, 6 categories incl. aiAgents) + `lib/baselineAssessment.ts` — OUTCOME-BASED: target scenarios must have the expected protection GUARANTEED (block satisfies everything; auth strength is tier-aware). An OR grant counts only if EVERY alternative satisfies the expectation — `[compliantDevice, domainJoinedDevice]` guarantees device trust, `[mfa, compliantDevice]` guarantees neither. Composite expectations (`device-trust-and-phishing-resistant-mfa`) are judged per part, each part by any applied policy (cross-policy AND).
+- **Slot-scoped checks** (`assessment.slot`) sweep ONLY the real account mapped into that persona slot — no synthetic persona, because the slot carries a role no account property reveals (Remote Help helper = Intune RBAC). Nothing mapped → status `unmapped`: in the status tally, outside every pass/total. Both Remote Help checks sweep Windows + macOS only (Microsoft supports CA for Remote Help there only; it does not apply to unattended access).
 - **Real personas run ALONGSIDE the synthetic ones** (`assessBaseline(policies, authStrengthMap, personas)`). The synthetic admin carries the GA role template id, no groups and no real object id, so nothing can exclude it — a policy that guarantees the control but excludes real admins passed 120/120 while the actual GA was uncovered. Class is derived from the account (`classifyPersona`), not the slot it sits in. Break-glass and service accounts are evaluated but partitioned out of the arithmetic entirely.
-- Statuses: pass / reportOnly (promoting report-only policies would fix it) / partial / fail. Licensing unknowable → P2/Purview checks fail honestly with badges.
-- `data/templatePolicies.ts` — Fix-in-sandbox template bodies; self-test loop: every template must satisfy its own check (`data/__tests__/templatePolicies.test.ts`).
+- Statuses: pass / reportOnly (promoting report-only policies would fix it) / partial / fail / unmapped (slot-scoped, nothing mapped — never run). Licensing unknowable → P2/Purview checks fail honestly with badges.
+- `data/templatePolicies.ts` — Fix-in-sandbox template bodies, static or factory (`(ctx) => body | null`); ALWAYS resolve via `resolveTemplate(checkId, ctx)`, never `.get()`. The operator template scopes itself to the mapped account (the tool cannot know the operators group) and the export marks it with a `deployNote`. Self-test loop: every template must satisfy its own check (`data/__tests__/templatePolicies.test.ts`), factories fed a fixture operator.
 - Agent checks sweep synthetic agent contexts (no personas, no device platform).
 
 ## Guided Tour (v0.6.16)

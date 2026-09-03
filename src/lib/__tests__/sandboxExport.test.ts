@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { buildChangePlan, toGraphPatchBody, stripDraftPrefix } from '../sandboxExport';
-import { TEMPLATE_POLICIES, templateDraftId } from '@/data/templatePolicies';
+import { resolveTemplate, templateDraftId } from '@/data/templatePolicies';
 import type { ConditionalAccessPolicy, PolicyConditions, PolicyState } from '@/engine/models/Policy';
 
 // ── Helpers ──
@@ -41,7 +41,7 @@ function createPolicy(overrides?: Partial<ConditionalAccessPolicy>): Conditional
 }
 
 function draftFor(checkId: string, state: PolicyState = 'enabled'): ConditionalAccessPolicy {
-  const template = TEMPLATE_POLICIES.get(checkId)!;
+  const template = resolveTemplate(checkId)!;
   return { ...template, id: templateDraftId(checkId), state };
 }
 
@@ -227,5 +227,49 @@ describe('toGraphPatchBody', () => {
     // Conditions pass through the Graph wire-format serializer (new object)
     expect((body.conditions as { users: unknown }).users).toEqual(effective.conditions.users);
     expect((body.conditions as { clientAppTypes: string[] }).clientAppTypes).toEqual(['all']);
+  });
+});
+
+// -- Deploy notes for account-scoped drafts --
+//
+// The operator template scopes itself to the mapped account because the tool
+// cannot know the operators group; the export has to say so where the admin
+// will read it, in both artifacts.
+
+describe('deployNote', () => {
+  const operatorDraft = createPolicy({
+    id: 'draft-operators',
+    displayName: '[Draft] Require compliant device and phishing-resistant MFA for Remote Help operators',
+    conditions: createBaseConditions({
+      users: {
+        includeUsers: ['u-helpdesk'],
+        excludeUsers: [],
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+    }),
+    grantControls: { operator: 'AND', builtInControls: ['compliantDevice'] },
+  });
+
+  it('flags a draft scoped to individual accounts, naming them, in Markdown and PowerShell', () => {
+    const names = new Map([['u-helpdesk', 'Morgan Helpdesk']]);
+    const plan = buildChangePlan([], {}, {}, { 'draft-operators': operatorDraft }, names, 'disabled');
+    expect(plan.creations[0].deployNote).toContain('Morgan Helpdesk');
+    expect(plan.creations[0].deployNote).toContain('replace with the intended group');
+    expect(plan.summaryMarkdown).toContain('Note: Scoped to individual account (Morgan Helpdesk)');
+    expect(plan.powershellScript).toContain('#    Scoped to individual account (Morgan Helpdesk)');
+  });
+
+  it('falls back to the id when no display name is known', () => {
+    const plan = buildChangePlan([], {}, {}, { 'draft-operators': operatorDraft }, undefined, 'disabled');
+    expect(plan.creations[0].deployNote).toContain('(u-helpdesk)');
+  });
+
+  it('is absent for population-scoped drafts', () => {
+    const plan = buildChangePlan([], {}, {}, { [templateDraftId('block-legacy-auth')]: draftFor('block-legacy-auth') }, undefined, 'disabled');
+    expect(plan.creations[0].deployNote).toBeUndefined();
+    expect(plan.summaryMarkdown).not.toContain('Note: Scoped');
   });
 });

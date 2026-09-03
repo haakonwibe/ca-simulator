@@ -16,7 +16,7 @@ import {
   type SandboxAssignments,
   type AssignmentField,
 } from '../lib/sandbox';
-import { TEMPLATE_POLICIES, templateDraftId } from '../data/templatePolicies';
+import { resolveTemplate, templateDraftId, type TemplateContext } from '../data/templatePolicies';
 import { GraphPermissionError, ADMIN_CONSENT_ERROR } from '../services/graphClient';
 import { trackEvent } from '../lib/analytics';
 
@@ -51,8 +51,9 @@ interface PolicyStoreState {
   setSandboxActive: (active: boolean) => void;
   setSandboxOverride: (policyId: string, state: PolicyState) => void;
   setAssignmentOverride: (policyId: string, field: AssignmentField, values: string[]) => void;
-  /** Creates (or reuses) a draft from a baseline template; activates the sandbox. Returns the draft id. */
-  createDraftFromTemplate: (checkId: string) => string | null;
+  /** Creates (or reuses) a draft from a baseline template; activates the sandbox. Returns the draft id,
+   *  or null when the check has no template or a factory template lacks its context. */
+  createDraftFromTemplate: (checkId: string, ctx?: TemplateContext) => string | null;
   revertPolicySandbox: (policyId: string) => void;
   resetSandbox: () => void;
   /** Merge resolved display names (e.g. from user search picks) for GUID rendering. */
@@ -296,8 +297,8 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     });
   },
 
-  createDraftFromTemplate: (checkId) => {
-    const template = TEMPLATE_POLICIES.get(checkId);
+  createDraftFromTemplate: (checkId, ctx) => {
+    const template = resolveTemplate(checkId, ctx);
     if (!template) return null;
 
     // Tracked here rather than at the button so it fires only when a draft

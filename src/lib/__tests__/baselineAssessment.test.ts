@@ -2,7 +2,7 @@
 
 import { describe, it, expect } from 'vitest';
 import { assessBaseline, type BaselineCheckResult, type BaselinePersonaInput } from '../baselineAssessment';
-import { BASELINE_CHECKS, AZURE_MANAGEMENT_APP_ID } from '@/data/baselineChecks';
+import { BASELINE_CHECKS, AZURE_MANAGEMENT_APP_ID, REMOTE_HELP_APP_ID, REMOTE_HELP_OPERATOR_SLOT } from '@/data/baselineChecks';
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
 import type { UserContext } from '@/engine/models/SimulationContext';
 import { classifyPersona } from '../gapPersonas';
@@ -64,20 +64,36 @@ const blockLegacyAuth = () =>
     grantControls: { operator: 'OR', builtInControls: ['block'] },
   });
 
+/** The shape Microsoft's Remote Help deploy doc tells admins to create. */
+const mfaForAllUsersExceptRemoteHelp = () =>
+  createPolicy({
+    id: 'mfa-all-except-remote-help',
+    displayName: 'Require MFA for All Users',
+    conditions: createBaseConditions({
+      applications: { includeApplications: ['All'], excludeApplications: [REMOTE_HELP_APP_ID] },
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['mfa'] },
+  });
+
 // ── Catalog sanity ──
 
 describe('baseline catalog', () => {
-  it('has 21 checks with unique ids', () => {
-    expect(BASELINE_CHECKS).toHaveLength(21);
+  it('has 23 checks with unique ids', () => {
+    expect(BASELINE_CHECKS).toHaveLength(23);
     const ids = new Set(BASELINE_CHECKS.map((c) => c.id));
-    expect(ids.size).toBe(21);
+    expect(ids.size).toBe(23);
   });
 
-  it('every check produces at least one scenario and a result', () => {
+  it('every check produces at least one scenario and a result — slot-scoped ones only once mapped', () => {
     const result = assessBaseline([]);
-    expect(result.checks).toHaveLength(21);
+    expect(result.checks).toHaveLength(23);
     for (const check of result.checks) {
-      expect(check.scenariosTotal).toBeGreaterThan(0);
+      if (check.check.assessment.slot) {
+        expect(check.status).toBe('unmapped');
+        expect(check.scenariosTotal).toBe(0);
+      } else {
+        expect(check.scenariosTotal).toBeGreaterThan(0);
+      }
     }
   });
 });
@@ -87,9 +103,11 @@ describe('baseline catalog', () => {
 describe('empty policy set', () => {
   it('fails every check with zero coverage', () => {
     const result = assessBaseline([]);
-    expect(result.counts.fail).toBe(21);
+    // 23 checks: 22 fail, and the slot-scoped operator check has no account to run
+    expect(result.counts.fail).toBe(22);
+    expect(result.counts.unmapped).toBe(1);
     expect(result.counts.pass).toBe(0);
-    for (const check of result.checks) {
+    for (const check of result.checks.filter((c) => !c.check.assessment.slot)) {
       expect(check.status).toBe('fail');
       expect(check.scenariosPassed).toBe(0);
       expect(check.failingExamples.length).toBeGreaterThan(0);
@@ -462,11 +480,187 @@ describe('AI Agents checks', () => {
   });
 });
 
+// ── Remote Help ──
+
+describe('Remote Help exclusion', () => {
+  it('passes when an All-apps MFA policy covers Remote Help', () => {
+    const result = assessBaseline([mfaForAllUsers()]);
+    expect(getCheck(result, 'require-mfa-remote-help').status).toBe('pass');
+  });
+
+  it('fails when Remote Assistance Service is excluded, while the all-users check still passes', () => {
+    const result = assessBaseline([mfaForAllUsersExceptRemoteHelp()]);
+
+    // The tenant looks fully covered by name — this is the silent hole.
+    expect(getCheck(result, 'require-mfa-all-users').status).toBe('pass');
+    expect(getCheck(result, 'require-mfa-remote-help').status).toBe('fail');
+    expect(getCheck(result, 'require-mfa-remote-help').scenariosPassed).toBe(0);
+  });
+});
+
+// ── Remote Help operators (slot-scoped) ──
+//
+// Helper status is an Intune RBAC assignment nothing in Entra exposes, so the
+// check sweeps only the account mapped into the Remote Help Operator slot and no
+// synthetic persona. Expecting device trust + phishing-resistant MFA from every
+// member on Remote Assistance Service would lock non-compliant sharers out.
+
+const OPERATOR_CHECK = 'require-device-trust-phishing-resistant-remote-help-operators';
+const PHISHING_RESISTANT = { id: '00000000-0000-0000-0000-000000000004', displayName: 'Phishing-resistant MFA' };
+
+const operator: UserContext = {
+  id: 'aaaaaaaa-1111-2222-3333-444444444444',
+  displayName: 'helpdesk@contoso.com',
+  userType: 'member',
+  memberOfGroupIds: ['group-helpdesk'],
+  directoryRoleIds: [],
+};
+
+const operatorPersona = (over?: Partial<BaselinePersonaInput>): BaselinePersonaInput => ({
+  user: operator,
+  label: 'helpdesk@contoso.com (Remote Help Operator)',
+  slotKey: REMOTE_HELP_OPERATOR_SLOT,
+  isException: false,
+  ...over,
+});
+
+/** A helpdesk-group policy on Remote Assistance Service with the given grant. */
+const helpdeskOnRemoteHelp = (grantControls: ConditionalAccessPolicy['grantControls'], id = 'helper-policy') =>
+  createPolicy({
+    id,
+    displayName: `Remote Help operators (${id})`,
+    conditions: createBaseConditions({
+      users: {
+        includeUsers: [],
+        excludeUsers: [],
+        includeGroups: ['group-helpdesk'],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: { includeApplications: [REMOTE_HELP_APP_ID], excludeApplications: [] },
+    }),
+    grantControls,
+  });
+
+const compliantAndPhishingResistant = () =>
+  helpdeskOnRemoteHelp({ operator: 'AND', builtInControls: ['compliantDevice'], authenticationStrength: PHISHING_RESISTANT });
+
+describe('Remote Help operators', () => {
+  it('is unmapped, not failed, when no operator is mapped', () => {
+    const result = assessBaseline([compliantAndPhishingResistant()]);
+    const check = getCheck(result, OPERATOR_CHECK);
+    expect(check.status).toBe('unmapped');
+    expect(check.scenariosTotal).toBe(0);
+    expect(check.personaResults).toEqual([]);
+
+    // In the status tally, in no category pair
+    expect(result.counts.unmapped).toBe(1);
+    const remoteWorkRun = BASELINE_CHECKS.filter((c) => c.categories.includes('remoteWork') && !c.assessment.slot).length;
+    expect(result.categoryCounts.remoteWork.total).toBe(remoteWorkRun);
+  });
+
+  it('passes when one policy requires compliant device AND phishing-resistant MFA', () => {
+    const check = getCheck(
+      assessBaseline([compliantAndPhishingResistant()], undefined, [operatorPersona()]),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('pass');
+    expect(check.satisfyingPolicies).toEqual(['Remote Help operators (helper-policy)']);
+    // No synthetic stand-in — only the mapped account is swept
+    expect(check.personaResults).toHaveLength(1);
+    expect(check.personaResults[0].kind).toBe('real');
+  });
+
+  it('sweeps Windows and macOS only — the platforms Microsoft supports CA for Remote Help on', () => {
+    const check = getCheck(
+      assessBaseline([compliantAndPhishingResistant()], undefined, [operatorPersona()]),
+      OPERATOR_CHECK,
+    );
+    // 1 app × 2 platforms × 4 client types × 2 locations
+    expect(check.scenariosTotal).toBe(16);
+    expect(check.failingExamples).toEqual([]);
+  });
+
+  it('fails when the operator policy requires MFA only', () => {
+    const check = getCheck(
+      assessBaseline([helpdeskOnRemoteHelp({ operator: 'OR', builtInControls: ['mfa'] })], undefined, [operatorPersona()]),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('fail');
+    expect(check.scenariosPassed).toBe(0);
+    expect(check.failingExamples.some((e) => e.includes('helpdesk@contoso.com'))).toBe(true);
+  });
+
+  it('honours cross-policy AND: compliant device from one policy, phishing-resistant from another', () => {
+    const compliantEverywhere = createPolicy({
+      id: 'compliant-all',
+      displayName: 'Require compliant device for all users',
+      grantControls: { operator: 'OR', builtInControls: ['compliantDevice'] },
+    });
+    const phishingResistantForHelpers = helpdeskOnRemoteHelp(
+      { operator: 'OR', builtInControls: [], authenticationStrength: PHISHING_RESISTANT },
+      'helper-pr',
+    );
+    const check = getCheck(
+      assessBaseline([compliantEverywhere, phishingResistantForHelpers], undefined, [operatorPersona()]),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('pass');
+    expect(check.satisfyingPolicies).toEqual([
+      'Require compliant device for all users',
+      'Remote Help operators (helper-pr)',
+    ]);
+  });
+
+  it('does not credit an OR grant — either alternative alone guarantees neither half', () => {
+    const check = getCheck(
+      assessBaseline(
+        [helpdeskOnRemoteHelp({ operator: 'OR', builtInControls: ['compliantDevice'], authenticationStrength: PHISHING_RESISTANT })],
+        undefined,
+        [operatorPersona()],
+      ),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('fail');
+  });
+
+  it('a block satisfies both halves', () => {
+    const check = getCheck(
+      assessBaseline([helpdeskOnRemoteHelp({ operator: 'OR', builtInControls: ['block'] })], undefined, [operatorPersona()]),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('pass');
+  });
+
+  it('the operator account still sweeps as a member in class-scoped checks', () => {
+    const allUsers = getCheck(assessBaseline([mfaForAllUsers()], undefined, [operatorPersona()]), 'require-mfa-all-users');
+    expect(allUsers.status).toBe('pass');
+    expect(allUsers.personaResults.some((p) => p.kind === 'real' && p.label.includes('helpdesk@contoso.com'))).toBe(true);
+  });
+
+  it('ignores an operator filed as an exception — never counted, so never mapped', () => {
+    const check = getCheck(
+      assessBaseline([compliantAndPhishingResistant()], undefined, [operatorPersona({ isException: true })]),
+      OPERATOR_CHECK,
+    );
+    expect(check.status).toBe('unmapped');
+  });
+
+  it('detects a report-only operator policy through the composite expectation', () => {
+    const reportOnly = { ...compliantAndPhishingResistant(), state: 'enabledForReportingButNotEnforced' as const };
+    const check = getCheck(assessBaseline([reportOnly], undefined, [operatorPersona()]), OPERATOR_CHECK);
+    expect(check.status).toBe('reportOnly');
+    expect(check.promotablePolicies).toEqual(['Remote Help operators (helper-policy)']);
+  });
+});
+
 describe('summaries', () => {
   it('counts add up to the catalog size', () => {
     const result = assessBaseline([mfaForAllUsers(), blockLegacyAuth()]);
-    const total = result.counts.pass + result.counts.reportOnly + result.counts.partial + result.counts.fail;
-    expect(total).toBe(21);
+    const { counts } = result;
+    const total = counts.pass + counts.reportOnly + counts.partial + counts.fail + counts.unmapped;
+    expect(total).toBe(23);
   });
 
   it('category counts cover all checks in that category', () => {
@@ -524,6 +718,7 @@ describe('assessBaseline with real personas', () => {
   const persona = (over?: Partial<BaselinePersonaInput>): BaselinePersonaInput => ({
     user: realAdmin,
     label: realAdmin.displayName,
+    slotKey: 'administrator',
     isException: false,
     ...over,
   });

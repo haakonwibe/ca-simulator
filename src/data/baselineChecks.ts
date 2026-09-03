@@ -10,6 +10,10 @@
 // Catalog source: https://learn.microsoft.com/entra/identity/conditional-access/concept-conditional-access-policy-common
 // The AI Agents template category is out of scope (the engine doesn't model
 // agent identities).
+//
+// One check sits outside that catalog: 'require-mfa-remote-help' comes from the
+// Intune Remote Help deployment doc, which tells admins to EXCLUDE Remote
+// Assistance Service from CA. The check exists to make that exclusion visible.
 
 import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from '@/engine/models/Policy';
 
@@ -43,6 +47,7 @@ export type BaselineExpectation =
   | 'mfa'                      // MFA or any authentication strength
   | 'phishing-resistant-mfa'   // authentication strength tier 3
   | 'device-trust'             // compliant or hybrid-joined device
+  | 'device-trust-and-phishing-resistant-mfa' // both guaranteed, possibly by different policies
   | 'device-trust-or-mfa'
   | 'app-protection'           // approved client app or app protection policy
   | 'password-change'
@@ -63,6 +68,14 @@ export interface BaselineAssessmentSpec {
     /** Agent risk dimension; defaults to ['none'] */
     agentRiskLevels?: (RiskLevel | 'none')[];
   };
+  /**
+   * Slot-scoped checks sweep only the real accounts mapped into this persona
+   * slot — no synthetic persona, and `personas` is ignored. For roles no
+   * account property reveals (a Remote Help helper is an Intune RBAC
+   * assignment), a synthetic stand-in would be a plain member and the check
+   * would demand the control from everyone.
+   */
+  slot?: string;
   target: BaselineTarget;
   /** Defaults to all four client app types */
   clientApps?: ClientAppType[];
@@ -93,6 +106,28 @@ const DOCS = 'https://learn.microsoft.com/entra/identity/conditional-access';
 
 /** Windows Azure Service Management API — the Azure management target app. */
 export const AZURE_MANAGEMENT_APP_ID = '797f4846-ba00-4fd7-ba43-dac1f8f63013';
+
+/**
+ * Remote Assistance Service — the backend service behind Intune Remote Help.
+ * Its service principal does not exist in a tenant until an admin creates it
+ * (`New-MgServicePrincipal -AppId "1dee7b72-…"`), so it is absent from most
+ * tenants and invisible to CA until then.
+ */
+export const REMOTE_HELP_APP_ID = '1dee7b72-b80d-4e56-933d-8b6b04f9a3e2';
+
+/**
+ * Persona slot for the account that drives Remote Help sessions. Helper status
+ * is an Intune RBAC assignment nothing in Entra exposes, so the user names one.
+ */
+export const REMOTE_HELP_OPERATOR_SLOT = 'remote-help-operator';
+
+/**
+ * Microsoft documents Conditional Access for Remote Help as supported on
+ * Windows and macOS only — a policy correctly scoped to those platforms must
+ * not fail on mobile scenarios CA never evaluates.
+ * https://learn.microsoft.com/intune/remote-help/plan#planning-considerations
+ */
+const REMOTE_HELP_PLATFORMS: DevicePlatform[] = ['windows', 'macOS'];
 
 export const BASELINE_CHECKS: readonly BaselineCheck[] = [
   {
@@ -383,6 +418,35 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
       identity: { type: 'agentUser', agentRiskLevels: ['medium', 'high'] },
       target: { kind: 'sweepApps' },
       expect: 'block',
+    },
+  },
+  {
+    id: 'require-mfa-remote-help',
+    name: 'Require multifactor authentication for Remote Help',
+    categories: ['remoteWork', 'protectAdmin'],
+    license: 'P1',
+    docsUrl: 'https://learn.microsoft.com/intune/remote-help/deploy#set-up-conditional-access-for-remote-help',
+    whyItMatters: "Microsoft's own deployment guidance is to exclude Remote Assistance Service from Conditional Access. That exclusion doesn't show up when you read a policy's name, and it means a helpdesk operator can drive a Remote Help session without the MFA the rest of the tenant enforces.",
+    assessment: {
+      personas: ['member', 'guest', 'admin'],
+      target: { kind: 'app', appId: REMOTE_HELP_APP_ID, displayName: 'Remote Assistance Service' },
+      platforms: REMOTE_HELP_PLATFORMS,
+      expect: 'mfa',
+    },
+  },
+  {
+    id: 'require-device-trust-phishing-resistant-remote-help-operators',
+    name: 'Require compliant device and phishing-resistant MFA for Remote Help operators',
+    categories: ['remoteWork', 'protectAdmin'],
+    license: 'P1',
+    docsUrl: 'https://learn.microsoft.com/intune/remote-help/plan#planning-considerations',
+    whyItMatters: "A helper holds elevated access to other people's devices, and Microsoft's planning guidance is to put Conditional Access in front of helper accounts for exactly that reason. A compromised helper account is a path onto every device it can reach, so the operator's own sign-in should demand a compliant device and phishing-resistant MFA. Assessed against the account mapped as Remote Help Operator — no synthetic persona can hold an Intune role.",
+    assessment: {
+      personas: [],
+      slot: REMOTE_HELP_OPERATOR_SLOT,
+      target: { kind: 'app', appId: REMOTE_HELP_APP_ID, displayName: 'Remote Assistance Service' },
+      platforms: REMOTE_HELP_PLATFORMS,
+      expect: 'device-trust-and-phishing-resistant-mfa',
     },
   },
 ] as const;

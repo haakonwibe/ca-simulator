@@ -14,6 +14,7 @@ import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from 
 import type { UserSearchResult } from '@/services/personaService';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { APP_BUNDLES } from '@/data/appBundles';
+import { REMOTE_HELP_APP_ID } from '@/data/baselineChecks';
 import { AboutDialog } from '@/components/AboutDialog';
 
 import { Button } from '@/components/ui/button';
@@ -376,6 +377,8 @@ export function ScenarioPanel() {
           displayName:
             appId === 'AllAgentIdResources'
               ? 'All Agent Resources'
+              : appId === REMOTE_HELP_APP_ID
+              ? 'Remote Help'
               : APP_BUNDLES.find((b) => b.id === appId)?.displayName
                 ?? tenantApps.find((a) => a.value === appId)?.label
                 ?? appId,
@@ -808,6 +811,13 @@ export function ScenarioPanel() {
                   ))}
                   <SelectItem value="AllAgentIdResources" className="text-xs">
                     All Agent Resources
+                  </SelectItem>
+                  <SelectItem
+                    value={REMOTE_HELP_APP_ID}
+                    className="text-xs"
+                    description="Intune Remote Help — Microsoft's guidance is to exclude it from CA"
+                  >
+                    Remote Help
                   </SelectItem>
                 </SelectGroup>
                 {tenantApps.length > 0 && (

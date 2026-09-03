@@ -42,4 +42,13 @@ export const SAMPLE_PERSONAS: UserContext[] = [
     memberOfGroupIds: ['group-service-accounts'],
     directoryRoleIds: [],
   },
+  {
+    // A Remote Help operator: a plain member whose helper status lives in Intune
+    // RBAC, not in any Entra property — map into the Remote Help Operator slot.
+    id: 'sample-user-6',
+    displayName: 'Morgan Helpdesk',
+    userType: 'member',
+    memberOfGroupIds: ['group-all-employees', 'group-helpdesk'],
+    directoryRoleIds: [],
+  },
 ];

@@ -55,6 +55,7 @@ const WELL_KNOWN_APPS: Record<string, string> = {
   '00000003-0000-0ff1-ce00-000000000000': 'Office 365 SharePoint Online',
   '00000003-0000-0000-c000-000000000000': 'Microsoft Graph',
   '797f4846-ba00-4fd7-ba43-dac1f8f63013': 'Azure Service Management',
+  '1dee7b72-b80d-4e56-933d-8b6b04f9a3e2': 'Remote Assistance Service',
 };
 
 const WELL_KNOWN_ROLES: Record<string, string> = {

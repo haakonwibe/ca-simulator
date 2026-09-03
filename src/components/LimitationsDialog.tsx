@@ -106,6 +106,14 @@ export function LimitationsDialog({
                 will therefore never match live guest personas.
               </LimitationItem>
               <LimitationItem>
+                <strong>Remote Help</strong> — Conditional Access gates the helper's sign-in
+                only. The target device's compliance is an informational banner inside Remote
+                Help; no policy, real or simulated, can gate a session on it. Microsoft documents
+                Conditional Access for Remote Help as Windows and macOS only, and as not applying
+                to unattended access — the Baseline checks sweep those two platforms and say
+                nothing about unattended sessions.
+              </LimitationItem>
+              <LimitationItem>
                 Named location matching requires manual selection (Trusted/Untrusted) — no
                 IP-based geolocation is performed.
               </LimitationItem>

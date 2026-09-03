@@ -2,6 +2,7 @@
 // Represents a realistic, diverse tenant configuration covering all condition types.
 
 import type { ConditionalAccessPolicy } from '../engine/models/Policy';
+import { REMOTE_HELP_APP_ID } from './baselineChecks';
 
 export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
   // 1. Require MFA for all users accessing Office 365
@@ -115,6 +116,10 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
         includeApplications: ['All'],
         excludeApplications: [
           '9cdead84-a403-4b2a-ab4c-a6a50620b2f1', // Azure Virtual Desktop
+          // Remote Help: a blanket compliance requirement locks out the user whose
+          // device fell out of compliance — the one who needs help. Operators are
+          // covered by CA023 instead.
+          REMOTE_HELP_APP_ID,
         ],
       },
       clientAppTypes: ['browser', 'mobileAppsAndDesktopClients'],
@@ -700,6 +705,39 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
     },
     sessionControls: null,
   },
+
+  // 23. Remote Help operators — the helper half of the Remote Help design.
+  // CA004 excludes Remote Assistance Service so non-compliant sharers can still
+  // get help; this policy puts the stronger bar on the people driving sessions.
+  // Cross-policy AND means the CA004 exclusion does not weaken operators.
+  {
+    id: 'ca-policy-023-remote-help-operators',
+    displayName: 'CA023: Remote Help operators — compliant device + phishing-resistant MFA',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: [],
+        excludeUsers: [],
+        includeGroups: ['group-helpdesk'],
+        excludeGroups: ['group-breakglass'],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: [REMOTE_HELP_APP_ID],
+        excludeApplications: [],
+      },
+      clientAppTypes: [],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'AND',
+      builtInControls: ['compliantDevice'],
+      authenticationStrength: { id: '00000000-0000-0000-0000-000000000004', displayName: 'Phishing-resistant MFA' },
+    },
+    sessionControls: null,
+  },
 ];
 
 /** Display names for GUIDs referenced in sample policies. */
@@ -708,6 +746,7 @@ export const SAMPLE_DISPLAY_NAMES: Record<string, string> = {
   'Office365': 'Office 365',
   'All': 'All Cloud Apps',
   'MicrosoftAdminPortals': 'Microsoft Admin Portals',
+  [REMOTE_HELP_APP_ID]: 'Remote Assistance Service',
   '797f4846-ba00-4fd7-ba43-dac1f8f63013': 'Azure Service Management',
   '9cdead84-a403-4b2a-ab4c-a6a50620b2f1': 'Azure Virtual Desktop',
   '499b84ac-1321-427f-aa17-267ca6975798': 'Azure DevOps',
@@ -726,4 +765,12 @@ export const SAMPLE_DISPLAY_NAMES: Record<string, string> = {
   'group-it': 'IT Department',
   'group-service-accounts': 'Service Accounts',
   'group-breakglass': 'Break Glass Accounts',
+  'group-helpdesk': 'Helpdesk Operators',
+  // Users (sample personas — policies scoped to one render its name, not a truncated id)
+  'sample-user-1': 'Alex Johnson',
+  'sample-user-2': 'Sam Chen',
+  'sample-user-3': 'Jordan Guest',
+  'break-glass-admin': 'Break Glass Account',
+  'sample-user-5': 'Riley Service',
+  'sample-user-6': 'Morgan Helpdesk',
 };

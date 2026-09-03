@@ -7,7 +7,8 @@ import { COLORS } from '@/data/theme';
 import { SAMPLE_PERSONAS } from '@/data/samplePersonas';
 import { analyzeGaps, groupGaps, detectDisagreement, getSweepScenarioCount } from '@/lib/gapAnalysis';
 import type { GapGroup, GapSeverity, GapPersonaSource, GapDisagreement } from '@/lib/gapAnalysis';
-import type { GapPersonaSlot } from '@/lib/gapPersonas';
+import { GAP_PERSONA_SLOTS, type GapPersonaSlot } from '@/lib/gapPersonas';
+import { REMOTE_HELP_OPERATOR_SLOT } from '@/data/baselineChecks';
 import { PersonaSlotCard, usePersonaSlots } from '@/components/PersonaMappingPanel';
 import { UserSearchInput } from '@/components/UserSearchInput';
 import { trackEvent, type EventTrigger } from '@/lib/analytics';
@@ -31,6 +32,7 @@ import {
   UserPlus,
   KeyRound,
   Bot,
+  Headset,
   ChevronRight,
   X,
 } from 'lucide-react';
@@ -82,6 +84,7 @@ const SLOT_ICONS: Record<string, typeof User> = {
   'guest-user': UserPlus,
   'break-glass': KeyRound,
   'service-account': Bot,
+  [REMOTE_HELP_OPERATOR_SLOT]: Headset,
 };
 
 // ── Gap type labels ──
@@ -231,7 +234,7 @@ function PersonaSourceToggle({
         onClick={() => setPersonaSource('resolved')}
       >
         <UsersRound className="h-3.5 w-3.5" />
-        Mapped Personas ({mappedCount}/5)
+        Mapped Personas ({mappedCount}/{GAP_PERSONA_SLOTS.length})
       </Button>
     </div>
   );
@@ -716,7 +719,7 @@ export function GapsView() {
               style={mappedCount > 0 ? { backgroundColor: COLORS.accent } : undefined}
             >
               <Search className="h-4 w-4" />
-              Analyze Mapped Personas ({mappedCount}/5)
+              Analyze Mapped Personas ({mappedCount}/{GAP_PERSONA_SLOTS.length})
             </Button>
           </div>
         </ScrollArea>

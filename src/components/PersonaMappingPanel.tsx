@@ -12,11 +12,12 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 import { COLORS } from '@/data/theme';
 import { classifyPersona, EXCEPTION_SLOT_KEYS } from '@/lib/gapPersonas';
 import type { GapPersonaSlot } from '@/lib/gapPersonas';
+import { REMOTE_HELP_OPERATOR_SLOT } from '@/data/baselineChecks';
 import { UserSearchInput } from '@/components/UserSearchInput';
 import type { UserSearchResult } from '@/services/personaService';
 import type { UserContext } from '@/engine/models/SimulationContext';
 import { Badge } from '@/components/ui/badge';
-import { Loader2, X, User, ShieldCheck, UserPlus, KeyRound, Bot } from 'lucide-react';
+import { Loader2, X, User, ShieldCheck, UserPlus, KeyRound, Bot, Headset } from 'lucide-react';
 
 const SLOT_ICONS: Record<string, typeof User> = {
   'standard-member': User,
@@ -24,6 +25,7 @@ const SLOT_ICONS: Record<string, typeof User> = {
   'guest-user': UserPlus,
   'break-glass': KeyRound,
   'service-account': Bot,
+  [REMOTE_HELP_OPERATOR_SLOT]: Headset,
 };
 
 const PERSONA_LABELS: Record<string, string> = {
@@ -122,6 +124,7 @@ export function PersonaSlotCard({
             <div className="mt-0.5 text-[10px] text-muted-foreground">
               {slot.user.memberOfGroupIds.length} groups &middot; {slot.user.directoryRoleIds.length} roles
               {assessedAs && ` · assessed as ${PERSONA_LABELS[assessedAs] ?? assessedAs}`}
+              {slot.key === REMOTE_HELP_OPERATOR_SLOT && ' · Remote Help operator'}
             </div>
           </div>
           <button onClick={onClear} className="shrink-0 text-muted-foreground hover:text-foreground">

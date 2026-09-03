@@ -15,9 +15,14 @@ import {
   type BaselinePersonaInput,
 } from '@/lib/baselineAssessment';
 import { usePersonaStore } from '@/stores/usePersonaStore';
-import { EXCEPTION_SLOT_KEYS } from '@/lib/gapPersonas';
+import { EXCEPTION_SLOT_KEYS, GAP_PERSONA_SLOTS } from '@/lib/gapPersonas';
 import { PersonaMappingPanel } from '@/components/PersonaMappingPanel';
-import { BASELINE_CATEGORY_LABELS, type BaselineCategory } from '@/data/baselineChecks';
+import {
+  BASELINE_CATEGORY_LABELS,
+  BASELINE_CHECKS,
+  REMOTE_HELP_OPERATOR_SLOT,
+  type BaselineCategory,
+} from '@/data/baselineChecks';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -35,6 +40,7 @@ import {
   Wrench,
   Users,
   UserCheck,
+  UserSearch,
 } from 'lucide-react';
 import { TEMPLATE_POLICIES, templateDraftId } from '@/data/templatePolicies';
 
@@ -51,6 +57,8 @@ const STATUS_CONFIG: Record<BaselineStatus, {
   partial: { label: 'PARTIAL', color: COLORS.unsatisfied, bg: COLORS.unsatisfiedBg, Icon: AlertTriangle, order: 1 },
   reportOnly: { label: 'REPORT-ONLY', color: COLORS.reportOnly, bg: COLORS.reportOnlyBg, Icon: Eye, order: 2 },
   pass: { label: 'PASS', color: COLORS.granted, bg: COLORS.grantedBg, Icon: ShieldCheck, order: 3 },
+  // Never run — sorts last and stays out of every pass/total pair
+  unmapped: { label: 'NEEDS MAPPING', color: COLORS.textMuted, bg: COLORS.bgCard, Icon: UserSearch, order: 4 },
 };
 
 const CATEGORY_ORDER: BaselineCategory[] = [
@@ -84,6 +92,7 @@ export function BaselineView() {
         .map((slot) => ({
           user: slot.user!,
           label: `${slot.user!.displayName} (${slot.label})`,
+          slotKey: slot.key,
           isException: EXCEPTION_SLOT_KEYS.has(slot.key),
         })),
     [personaSlots],
@@ -156,7 +165,7 @@ export function BaselineView() {
               </div>
             </div>
           )}
-          {/* Collapsed checks tile so 21 of them fit on one screen; an expanded one
+          {/* Collapsed checks tile so the whole catalogue fits on one screen; an expanded one
               spans the row, because its evidence lists need the width to stay readable. */}
           <div className="grid grid-cols-1 gap-2 lg:grid-cols-2 2xl:grid-cols-3">
             {visibleChecks.map((result) => {
@@ -169,6 +178,7 @@ export function BaselineView() {
                     onToggle={() => toggleExpanded(result.check.id)}
                     sandboxActive={sandboxActive}
                     hasRealPersonas={realCount > 0}
+                    onOpenMapping={() => setShowMapping(true)}
                   />
                 </div>
               );
@@ -211,6 +221,7 @@ function BaselineHeader({
   onToggleMapping: () => void;
 }) {
   const { counts } = assessment;
+  // Unmapped checks were never run, so they are outside the headline and the bar
   const total = counts.pass + counts.reportOnly + counts.partial + counts.fail;
 
   const segments: { status: BaselineStatus; count: number }[] = [
@@ -230,12 +241,17 @@ function BaselineHeader({
               {counts.pass} of {total}
             </span>
             <span className="ml-1.5 text-xs text-muted-foreground">checks pass</span>
+            {counts.unmapped > 0 && (
+              <span className="ml-1.5 text-[10px]" style={{ color: COLORS.textDim }}>
+                +{counts.unmapped} need{counts.unmapped === 1 ? 's' : ''} mapping
+              </span>
+            )}
           </div>
           <div
             className="flex h-2 flex-1 overflow-hidden rounded-full"
             style={{ backgroundColor: COLORS.bgCard }}
             role="img"
-            aria-label={`${counts.pass} pass, ${counts.reportOnly} report-only, ${counts.partial} partial, ${counts.fail} fail`}
+            aria-label={`${counts.pass} pass, ${counts.reportOnly} report-only, ${counts.partial} partial, ${counts.fail} fail, ${counts.unmapped} not mapped`}
           >
             {segments.filter((s) => s.count > 0).map((s) => (
               <div
@@ -319,17 +335,20 @@ function CheckCard({
   onToggle,
   sandboxActive,
   hasRealPersonas,
+  onOpenMapping,
 }: {
   result: BaselineCheckResult;
   isExpanded: boolean;
   onToggle: () => void;
   sandboxActive: boolean;
   hasRealPersonas: boolean;
+  onOpenMapping: () => void;
 }) {
   const config = STATUS_CONFIG[result.status];
   const Icon = config.Icon;
   const Chevron = isExpanded ? ChevronDown : ChevronRight;
   const { check } = result;
+  const slotLabel = GAP_PERSONA_SLOTS.find((s) => s.key === check.assessment.slot)?.label;
 
   const coverage = result.status === 'partial'
     ? `${result.scenariosPassed}/${result.scenariosTotal} scenarios`
@@ -394,6 +413,28 @@ function CheckCard({
               Also rendered once a draft exists, whatever the status: a draft-earned
               pass that hides its own disclosure reads as a tenant policy. */}
           <FixInSandbox checkId={check.id} status={result.status} />
+
+          {/* Slot-scoped check with nothing mapped: say what to do, not pass or fail */}
+          {result.status === 'unmapped' && (
+            <EvidenceSection title="Not yet assessed">
+              <p style={{ color: COLORS.textMuted }}>
+                Scoped to the {slotLabel ?? 'Remote Help Operator'} persona slot — map an account that
+                holds the Remote Help helper role to assess it. No synthetic persona can stand in:
+                helper status is an Intune role assignment, and demanding these controls from every
+                member would lock non-compliant sharers out of Remote Help.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-6 gap-1 px-2 text-[10px]"
+                style={{ color: COLORS.accentLight, borderColor: COLORS.border }}
+                onClick={onOpenMapping}
+              >
+                <UserSearch className="h-3 w-3" />
+                Map an operator
+              </Button>
+            </EvidenceSection>
+          )}
 
           {/* Evidence */}
           {result.status === 'pass' && result.satisfyingPolicies.length > 0 && (
@@ -498,6 +539,12 @@ function CheckCard({
 function FixInSandbox({ checkId, status }: { checkId: string; status: BaselineStatus }) {
   const createDraftFromTemplate = usePolicyStore((s) => s.createDraftFromTemplate);
   const sandboxDrafts = usePolicyStore((s) => s.sandboxDrafts);
+  // The operator template scopes itself to the mapped account — the store cannot
+  // read the persona store (stores stay independent), so the view hands it over.
+  const operator = usePersonaStore(
+    (s) => s.personaSlots.find((slot) => slot.key === REMOTE_HELP_OPERATOR_SLOT)?.user,
+  );
+  const slotScoped = BASELINE_CHECKS.find((c) => c.id === checkId)?.assessment.slot !== undefined;
 
   if (!TEMPLATE_POLICIES.has(checkId)) return null;
   const draftExists = templateDraftId(checkId) in sandboxDrafts;
@@ -510,7 +557,7 @@ function FixInSandbox({ checkId, status }: { checkId: string; status: BaselineSt
         size="sm"
         className="h-6 gap-1 px-2 text-[10px]"
         style={{ color: COLORS.warning, borderColor: 'rgba(217, 119, 6, 0.4)' }}
-        onClick={() => createDraftFromTemplate(checkId)}
+        onClick={() => createDraftFromTemplate(checkId, { operator })}
         disabled={draftExists}
       >
         <Wrench className="h-3 w-3" />
@@ -519,7 +566,9 @@ function FixInSandbox({ checkId, status }: { checkId: string; status: BaselineSt
       <span className="text-[10px]" style={{ color: draftExists ? COLORS.warning : COLORS.textDim }}>
         {draftExists
           ? 'This check is assessed against the sandbox draft — that policy does not exist in your tenant.'
-          : "Drafts Microsoft's template policy in the sandbox and re-assesses instantly."}
+          : slotScoped
+            ? 'Drafts a policy scoped to the mapped operator account — swap in your Remote Help operators group before deploying.'
+            : "Drafts Microsoft's template policy in the sandbox and re-assesses instantly."}
       </span>
     </div>
   );

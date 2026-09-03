@@ -12,10 +12,12 @@
 //   they aren't needed to satisfy the corresponding baseline checks.
 //
 // Self-test invariant (enforced by tests): every template, drafted into an
-// empty tenant, satisfies its own baseline check.
+// empty tenant, satisfies its own baseline check. Factory templates are
+// resolved with a fixture context first.
 
 import type { ConditionalAccessPolicy, PolicyConditions } from '@/engine/models/Policy';
-import { AZURE_MANAGEMENT_APP_ID } from '@/data/baselineChecks';
+import type { UserContext } from '@/engine/models/SimulationContext';
+import { AZURE_MANAGEMENT_APP_ID, REMOTE_HELP_APP_ID } from '@/data/baselineChecks';
 
 /** The 14 admin roleTemplateIds Microsoft's admin-scoped templates target. */
 export const TEMPLATE_ADMIN_ROLE_IDS: readonly string[] = [
@@ -73,11 +75,28 @@ function adminUsers(): PolicyConditions['users'] {
   };
 }
 
+export type TemplateBody = Omit<ConditionalAccessPolicy, 'id' | 'state'>;
+
+/** What a template factory may need from the caller. */
+export interface TemplateContext {
+  /** The account mapped as Remote Help Operator, when one is. */
+  operator?: UserContext;
+}
+
+/**
+ * A static body, or a factory for templates that cannot be static — the
+ * operator template scopes itself to the mapped account because the tool
+ * cannot know the operators group. A factory returns null when its context is
+ * missing.
+ */
+export type TemplateEntry = TemplateBody | ((ctx: TemplateContext) => TemplateBody | null);
+
 /**
  * Template policy bodies keyed by baseline check id. `id` and `state` are
- * assigned at draft-creation time by the store.
+ * assigned at draft-creation time by the store. Resolve through
+ * `resolveTemplate`, never `.get()` — some entries are factories.
  */
-export const TEMPLATE_POLICIES: ReadonlyMap<string, Omit<ConditionalAccessPolicy, 'id' | 'state'>> = new Map([
+export const TEMPLATE_POLICIES: ReadonlyMap<string, TemplateEntry> = new Map<string, TemplateEntry>([
   ['require-mfa-admins', {
     displayName: '[Draft] Require multifactor authentication for admins',
     conditions: conditions({ users: adminUsers() }),
@@ -135,6 +154,14 @@ export const TEMPLATE_POLICIES: ReadonlyMap<string, Omit<ConditionalAccessPolicy
     displayName: '[Draft] Require multifactor authentication for Azure management',
     conditions: conditions({
       applications: { includeApplications: [AZURE_MANAGEMENT_APP_ID], excludeApplications: [] },
+    }),
+    grantControls: { operator: 'OR', builtInControls: ['mfa'] },
+    sessionControls: null,
+  }],
+  ['require-mfa-remote-help', {
+    displayName: '[Draft] Require multifactor authentication for Remote Help',
+    conditions: conditions({
+      applications: { includeApplications: [REMOTE_HELP_APP_ID], excludeApplications: [] },
     }),
     grantControls: { operator: 'OR', builtInControls: ['mfa'] },
     sessionControls: null,
@@ -273,7 +300,42 @@ export const TEMPLATE_POLICIES: ReadonlyMap<string, Omit<ConditionalAccessPolicy
     grantControls: { operator: 'OR', builtInControls: ['block'] },
     sessionControls: null,
   }],
+  ['require-device-trust-phishing-resistant-remote-help-operators', (ctx: TemplateContext): TemplateBody | null => {
+    // Scoped to the mapped operator account, not a group: the tool cannot know
+    // the operators group, and an All-users body would be the sharer lockout the
+    // deploy guidance exists to avoid. One named account standing in for the
+    // group is exactly how the check itself works; the export note says to swap
+    // the account for the group before deploying.
+    if (!ctx.operator) return null;
+    return {
+      displayName: '[Draft] Require compliant device and phishing-resistant MFA for Remote Help operators',
+      conditions: conditions({
+        users: {
+          includeUsers: [ctx.operator.id],
+          excludeUsers: [],
+          includeGroups: [],
+          excludeGroups: [],
+          includeRoles: [],
+          excludeRoles: [],
+        },
+        applications: { includeApplications: [REMOTE_HELP_APP_ID], excludeApplications: [] },
+      }),
+      grantControls: {
+        operator: 'AND',
+        builtInControls: ['compliantDevice'],
+        authenticationStrength: { id: AUTH_STRENGTH_PHISHING_RESISTANT, displayName: 'Phishing-resistant MFA' },
+      },
+      sessionControls: null,
+    };
+  }],
 ]);
+
+/** The one lookup: a static body as-is, a factory called with the context. */
+export function resolveTemplate(checkId: string, ctx: TemplateContext = {}): TemplateBody | null {
+  const entry = TEMPLATE_POLICIES.get(checkId);
+  if (!entry) return null;
+  return typeof entry === 'function' ? entry(ctx) : entry;
+}
 
 /** Draft id for a template — stable so repeat Fix-in-sandbox reuses the draft. */
 export function templateDraftId(checkId: string): string {

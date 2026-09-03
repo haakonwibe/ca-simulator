@@ -38,6 +38,8 @@ export interface PolicyCreation {
   policyName: string;
   /** Complete Graph POST body */
   policyBody: Record<string, unknown>;
+  /** Set when the draft is scoped to individual accounts — a stand-in for a group the tool cannot know */
+  deployNote?: string;
 }
 
 export interface ChangePlan {
@@ -168,6 +170,9 @@ const STATE_LABELS: Record<PolicyState, string> = {
   disabled: 'Off',
 };
 
+/** includeUsers values that name a population rather than an account */
+const SPECIAL_USER_VALUES: ReadonlySet<string> = new Set(['All', 'None', 'GuestsOrExternalUsers', 'AllAgentIdUsers']);
+
 const CHECKLIST = [
   'Verify break-glass / emergency access accounts are excluded from every policy before deploying.',
   'Test with a pilot group before organization-wide rollout.',
@@ -209,6 +214,7 @@ function buildSummaryMarkdown(
     lines.push('## New policies', '');
     for (const creation of creations) {
       lines.push(`- **${creation.policyName}** — exported as ${STATE_LABELS[newPolicyState]}`);
+      if (creation.deployNote) lines.push(`  - Note: ${creation.deployNote}`);
     }
     lines.push('');
   }
@@ -259,8 +265,9 @@ function buildPowershellScript(
   }
 
   for (const creation of creations) {
+    lines.push(`# ── Create: ${creation.policyName} ──`);
+    if (creation.deployNote) lines.push(`#    ${creation.deployNote}`);
     lines.push(
-      `# ── Create: ${creation.policyName} ──`,
       `Invoke-MgGraphRequest -Method POST -Uri 'https://graph.microsoft.com/v1.0/identity/conditionalAccess/policies' -ContentType 'application/json' -Body @'`,
       JSON.stringify(creation.policyBody, null, 2),
       "'@",
@@ -292,10 +299,19 @@ export function buildChangePlan(
     if (change.isNew) {
       const draft = drafts[change.policyId];
       if (!draft) continue;
+      // A draft scoped to named accounts (the operator template) stands in for a
+      // group the tool cannot know — say so where the admin will read it.
+      const individuals = draft.conditions.users.includeUsers.filter((id) => !SPECIAL_USER_VALUES.has(id));
+      const deployNote = individuals.length > 0
+        ? `Scoped to individual account${individuals.length === 1 ? '' : 's'} (${individuals
+            .map((id) => displayNames?.get(id) ?? id)
+            .join(', ')}) as a stand-in for a group — replace with the intended group before deploying.`
+        : undefined;
       creations.push({
         draftId: change.policyId,
         policyName: stripDraftPrefix(draft.displayName),
         policyBody: toGraphCreateBody(draft, newPolicyState),
+        ...(deployNote ? { deployNote } : {}),
       });
     } else {
       const effectivePolicy = effectiveById.get(change.policyId);

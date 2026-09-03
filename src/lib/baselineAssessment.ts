@@ -25,16 +25,22 @@ import {
 
 // ── Types ───────────────────────────────────────────────────────────
 
-export type BaselineStatus = 'pass' | 'reportOnly' | 'partial' | 'fail';
+/**
+ * `unmapped` is a slot-scoped check with no account mapped into its slot: never
+ * run, so neither a pass nor a fail, and counted in no category.
+ */
+export type BaselineStatus = 'pass' | 'reportOnly' | 'partial' | 'fail' | 'unmapped';
 
 /**
  * A real tenant account to assess alongside the synthetic personas.
  * `isException` marks break-glass / automation accounts: still evaluated, never
- * counted against a check.
+ * counted against a check. `slotKey` names the persona slot the account was
+ * mapped into — slot-scoped checks select on it.
  */
 export interface BaselinePersonaInput {
   user: UserContext;
   label: string;
+  slotKey: string;
   isException: boolean;
 }
 
@@ -191,6 +197,19 @@ function personaSweepEntries(
   return entries;
 }
 
+/**
+ * Slot-scoped checks sweep only the accounts mapped into one slot, with no
+ * synthetic stand-in: the slot carries a role no account property reveals, so a
+ * synthetic persona would be a plain member and the check would demand the
+ * control from everyone. Exception accounts never belong in a role slot, but
+ * are filtered defensively.
+ */
+function slotSweepEntries(slot: string, personas?: BaselinePersonaInput[]): PersonaSweepEntry[] {
+  return (personas ?? [])
+    .filter((p) => p.slotKey === slot && !p.isException)
+    .map((p) => ({ user: p.user, label: p.label, kind: 'real' as const, isException: false }));
+}
+
 function generateScenarios(
   check: BaselineCheck,
   personas?: BaselinePersonaInput[],
@@ -214,40 +233,42 @@ function generateScenarios(
   const userRisks = spec.userRiskLevels ?? ['none'];
   const insiderRisks = spec.insiderRiskLevels ?? ['none'];
 
-  for (const persona of spec.personas) {
-    for (const entry of personaSweepEntries(persona, personas)) {
-      const user: UserContext = entry.user;
-      for (const target of targets) {
-        for (const platform of platforms) {
-          for (const clientApp of clientApps) {
-            for (const location of locations) {
-              for (const signInRisk of signInRisks) {
-                for (const userRisk of userRisks) {
-                  for (const insiderRisk of insiderRisks) {
-                    scenarios.push({
-                      context: {
-                        user,
-                        application: target.userAction
-                          ? { appId: '', displayName: target.displayName, userAction: target.userAction }
-                          : { appId: target.appId, displayName: target.displayName },
-                        device: { platform },
-                        location: { isTrustedLocation: location === 'trusted' },
-                        risk: {
-                          signInRiskLevel: signInRisk as RiskLevel | 'none',
-                          userRiskLevel: userRisk as RiskLevel | 'none',
-                          insiderRiskLevel: insiderRisk as InsiderRiskLevel | 'none',
-                        },
-                        clientAppType: clientApp,
-                        authenticationFlow: 'none',
-                        authenticationStrengthLevel: 0,
-                        satisfiedControls: [],
+  const entries: PersonaSweepEntry[] = spec.slot
+    ? slotSweepEntries(spec.slot, personas)
+    : spec.personas.flatMap((persona) => personaSweepEntries(persona, personas));
+
+  for (const entry of entries) {
+    const user: UserContext = entry.user;
+    for (const target of targets) {
+      for (const platform of platforms) {
+        for (const clientApp of clientApps) {
+          for (const location of locations) {
+            for (const signInRisk of signInRisks) {
+              for (const userRisk of userRisks) {
+                for (const insiderRisk of insiderRisks) {
+                  scenarios.push({
+                    context: {
+                      user,
+                      application: target.userAction
+                        ? { appId: '', displayName: target.displayName, userAction: target.userAction }
+                        : { appId: target.appId, displayName: target.displayName },
+                      device: { platform },
+                      location: { isTrustedLocation: location === 'trusted' },
+                      risk: {
+                        signInRiskLevel: signInRisk as RiskLevel | 'none',
+                        userRiskLevel: userRisk as RiskLevel | 'none',
+                        insiderRiskLevel: insiderRisk as InsiderRiskLevel | 'none',
                       },
-                      description: describeScenario(entry.label, target.displayName, platform, clientApp, location, signInRisk, userRisk, insiderRisk),
-                      personaLabel: entry.label,
-                      personaKind: entry.kind,
-                      isException: entry.isException,
-                    });
-                  }
+                      clientAppType: clientApp,
+                      authenticationFlow: 'none',
+                      authenticationStrengthLevel: 0,
+                      satisfiedControls: [],
+                    },
+                    description: describeScenario(entry.label, target.displayName, platform, clientApp, location, signInRisk, userRisk, insiderRisk),
+                    personaLabel: entry.label,
+                    personaKind: entry.kind,
+                    isException: entry.isException,
+                  });
                 }
               }
             }
@@ -374,6 +395,34 @@ function findSatisfyingPolicy(
   return null;
 }
 
+/**
+ * Composite expectations are judged per part, each part by any applied policy —
+ * cross-policy AND means an All-apps compliant-device policy and a helper-scoped
+ * phishing-resistant policy together guarantee both. A single grant unit can
+ * never satisfy a composite, which is why it is not a case in unitMeetsExpectation.
+ */
+const EXPECTATION_PARTS: Partial<Record<BaselineExpectation, BaselineExpectation[]>> = {
+  'device-trust-and-phishing-resistant-mfa': ['device-trust', 'phishing-resistant-mfa'],
+};
+
+/**
+ * Names of the policies guaranteeing every part of the expectation, or null if
+ * any part is unguaranteed. Simple expectations yield a single name.
+ */
+function findSatisfyingPolicies(
+  result: CAEngineResult,
+  expect: BaselineExpectation,
+  customAuthStrengthMap?: ReadonlyMap<string, number>,
+): string[] | null {
+  const names: string[] = [];
+  for (const part of EXPECTATION_PARTS[expect] ?? [expect]) {
+    const name = findSatisfyingPolicy(result, part, customAuthStrengthMap);
+    if (!name) return null;
+    if (!names.includes(name)) names.push(name);
+  }
+  return names;
+}
+
 function blockSource(result: CAEngineResult): string {
   const blocker = result.appliedPolicies.find((p) => p.grantControls?.controls.includes('block'));
   return blocker?.policyName ?? 'Blocked';
@@ -430,7 +479,7 @@ export function assessBaseline(
 
     scenarios.forEach((scenario, i) => {
       const result = engine.evaluate(policies, withContext(scenario.context));
-      const satisfier = findSatisfyingPolicy(result, expect, customAuthStrengthMap);
+      const satisfiers = findSatisfyingPolicies(result, expect, customAuthStrengthMap);
 
       // Break-glass and automation accounts are meant to sit outside policy.
       // Evaluate and report them, but keep them out of the arithmetic entirely —
@@ -439,7 +488,7 @@ export function assessBaseline(
         const tally = exceptionTally.get(scenario.personaLabel)
           ?? { label: scenario.personaLabel, passed: 0, total: 0, failingExamples: [] };
         tally.total++;
-        if (satisfier) tally.passed++;
+        if (satisfiers) tally.passed++;
         else pushCapped(tally.failingExamples, scenario.description, EXAMPLE_CAP);
         exceptionTally.set(scenario.personaLabel, tally);
         return;
@@ -450,10 +499,10 @@ export function assessBaseline(
       tally.total++;
       countedTotal++;
 
-      if (satisfier) {
+      if (satisfiers) {
         passed++;
         tally.passed++;
-        pushCapped(satisfyingPolicies, satisfier, POLICY_CAP);
+        for (const name of satisfiers) pushCapped(satisfyingPolicies, name, POLICY_CAP);
       } else {
         failingIndices.push(i);
         pushCapped(failingExamples, scenario.description, EXAMPLE_CAP);
@@ -465,7 +514,11 @@ export function assessBaseline(
     let status: BaselineStatus;
     const promotablePolicies: string[] = [];
 
-    if (passed === countedTotal) {
+    if (check.assessment.slot && countedTotal === 0) {
+      // Slot-scoped check with nothing mapped: never run, so neither pass nor
+      // fail. Must precede the pass branch — 0 === 0 would read as a pass.
+      status = 'unmapped';
+    } else if (passed === countedTotal) {
       status = 'pass';
     } else {
       let promotedFixesAll = false;
@@ -473,15 +526,17 @@ export function assessBaseline(
         promotedFixesAll = true;
         for (const i of failingIndices) {
           const promotedResult = engine.evaluate(promotedPolicies, withContext(scenarios[i].context));
-          const satisfier = findSatisfyingPolicy(promotedResult, expect, customAuthStrengthMap);
-          if (!satisfier) {
+          const satisfiers = findSatisfyingPolicies(promotedResult, expect, customAuthStrengthMap);
+          if (!satisfiers) {
             promotedFixesAll = false;
             break;
           }
           // Credit only genuinely report-only policies as promotable
-          const satisfierPolicy = policies.find((p) => p.displayName === satisfier);
-          if (satisfierPolicy && reportOnlyIds.has(satisfierPolicy.id)) {
-            pushCapped(promotablePolicies, satisfier, POLICY_CAP);
+          for (const name of satisfiers) {
+            const satisfierPolicy = policies.find((p) => p.displayName === name);
+            if (satisfierPolicy && reportOnlyIds.has(satisfierPolicy.id)) {
+              pushCapped(promotablePolicies, name, POLICY_CAP);
+            }
           }
         }
       }
@@ -512,7 +567,7 @@ export function assessBaseline(
   }
 
   // Summaries
-  const counts: Record<BaselineStatus, number> = { pass: 0, reportOnly: 0, partial: 0, fail: 0 };
+  const counts: Record<BaselineStatus, number> = { pass: 0, reportOnly: 0, partial: 0, fail: 0, unmapped: 0 };
   const categoryCounts = {
     secureFoundation: { passed: 0, total: 0 },
     zeroTrust: { passed: 0, total: 0 },
@@ -524,6 +579,9 @@ export function assessBaseline(
 
   for (const result of checks) {
     counts[result.status]++;
+    // An unmapped check was never run — it is in the status tally but in no
+    // category pair, or Remote Work would sit on amber for nothing.
+    if (result.status === 'unmapped') continue;
     for (const category of result.check.categories) {
       categoryCounts[category].total++;
       if (result.status === 'pass') categoryCounts[category].passed++;

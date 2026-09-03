@@ -17,6 +17,24 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.18',
+    subtitle: 'Remote Help',
+    features: [
+      {
+        heading: 'Remote Help as a Named Resource',
+        body: 'Intune Remote Help runs on a service that most tenants never see: its service principal has to be created by hand before Conditional Access can target it at all. Policies that include or exclude it now read by name instead of showing a bare identifier, and it can be selected in the Simulation Context to evaluate a support session the same way as any other resource.',
+      },
+      {
+        heading: 'A Baseline Check for Support Sessions',
+        body: 'Microsoft’s deployment guidance is to exclude Remote Help from Conditional Access, which is sound advice for device requirements — the person whose device has fallen out of compliance is exactly the person who needs help — but it is easy to apply more widely than intended. A new Baseline check reports whether multifactor authentication still reaches Remote Help, so an exclusion made for one reason does not quietly remove every control. Fix in sandbox drafts the policy that closes it.',
+      },
+      {
+        heading: 'A Check for Remote Help Operators',
+        body: 'Microsoft’s planning guidance puts Conditional Access in front of helper accounts, because a helper holds elevated access to other people’s devices. No synthetic persona can stand in for one: helper status is an Intune role assignment that nothing in Entra exposes, and demanding a compliant device and phishing-resistant MFA from every member on Remote Help would lock non-compliant sharers out. A sixth persona slot, Remote Help Operator, takes a real helpdesk account, and a new Baseline check verifies that account reaches Remote Help only from a compliant device with phishing-resistant MFA. Until an account is mapped the check reads Needs mapping rather than pretending either way. Fix in sandbox drafts a policy scoped to the mapped account, to be widened to the operators group before deploying. Both Remote Help checks sweep Windows and macOS, the platforms Microsoft supports Conditional Access for Remote Help on. Sample data gains Morgan Helpdesk and the matching operator policy.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.16',
     subtitle: 'Guided Tour',
     features: [

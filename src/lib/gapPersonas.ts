@@ -5,7 +5,7 @@
 // slots out of usePersonaStore so a mapping done in one tab holds in the other.
 
 import type { UserContext } from '@/engine/models/SimulationContext';
-import type { BaselinePersona } from '@/data/baselineChecks';
+import { REMOTE_HELP_OPERATOR_SLOT, type BaselinePersona } from '@/data/baselineChecks';
 
 export interface GapPersonaSlot {
   key: string;
@@ -39,6 +39,14 @@ export const GAP_PERSONA_SLOTS: Omit<GapPersonaSlot, 'user'>[] = [
     key: 'service-account',
     label: 'Service Account',
     description: 'An automation or shared account. Often excluded from MFA — check for compensating controls like location or device restrictions.',
+  },
+  {
+    // A role slot, not a class slot: helper status is an Intune RBAC assignment
+    // that no account property reveals, so the slot carries what the classifier
+    // cannot. The account still sweeps as whatever class it IS everywhere else.
+    key: REMOTE_HELP_OPERATOR_SLOT,
+    label: 'Remote Help Operator',
+    description: 'A helpdesk account that drives Intune Remote Help sessions. Helper status is an Intune role assignment Entra cannot see, so name one here to assess the operator policy.',
   },
 ];
 
