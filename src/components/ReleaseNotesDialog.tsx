@@ -17,6 +17,26 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.26',
+    subtitle: 'Remote Help accuracy',
+    features: [
+      {
+        heading: 'Remote Help Checks Match the Real Sign-in',
+        body: 'The two Remote Help checks now cover the shapes a session can actually take: Windows and macOS, through browser and modern clients. They describe attended sessions, because an unattended session signs in to Microsoft Graph rather than to Remote Assistance Service, and no policy naming that service reaches it.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.24',
+    subtitle: 'Access guidance',
+    features: [
+      {
+        heading: 'Clearer Guidance When Access Is Denied',
+        body: 'When Microsoft Graph declines to return policies, the message now covers both requirements: admin consent for the app, and a directory role on the signed-in account. It names the roles that grant policy read, so the next step is clear either way.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.20',
     subtitle: 'Microsoft services',
     features: [

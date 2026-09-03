@@ -572,13 +572,15 @@ describe('Remote Help operators', () => {
     expect(check.personaResults[0].kind).toBe('real');
   });
 
-  it('sweeps Windows and macOS only — the platforms Microsoft supports CA for Remote Help on', () => {
+  it('sweeps only shapes a Remote Help sign-in can actually take', () => {
     const check = getCheck(
       assessBaseline([compliantAndPhishingResistant()], undefined, [operatorPersona()]),
       OPERATOR_CHECK,
     );
-    // 1 app × 2 platforms × 4 client types × 2 locations
-    expect(check.scenariosTotal).toBe(16);
+    // 1 app x 2 platforms (Windows, macOS — Microsoft documents CA for Remote
+    // Help on those two) x 2 client types (browser + modern; legacy is
+    // impossible for an OAuth app) x 2 locations
+    expect(check.scenariosTotal).toBe(8);
     expect(check.failingExamples).toEqual([]);
   });
 

@@ -129,6 +129,20 @@ export const REMOTE_HELP_OPERATOR_SLOT = 'remote-help-operator';
  */
 const REMOTE_HELP_PLATFORMS: DevicePlatform[] = ['windows', 'macOS'];
 
+/**
+ * Remote Help authenticates through a browser flow: live sign-in logs show
+ * ClientAppUsed = Browser for every session, native app included: 8 rows
+ * across three days in a production tenant, 2026-09-03.
+ *
+ * Legacy client types are dropped because they are impossible here — Remote
+ * Help speaks modern OAuth, not Exchange ActiveSync. Modern desktop and mobile
+ * clients are kept: unobserved so far, but plausible (Android Remote Help
+ * exists), and a check that under-requires would report a false pass. Unlike
+ * the platform list, this is our observation rather than Microsoft's
+ * documentation, which is why it is not narrowed further to browser alone.
+ */
+const REMOTE_HELP_CLIENT_APPS: ClientAppType[] = ['browser', 'mobileAppsAndDesktopClients'];
+
 export const BASELINE_CHECKS: readonly BaselineCheck[] = [
   {
     id: 'require-mfa-admins',
@@ -426,11 +440,12 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
     categories: ['remoteWork', 'protectAdmin'],
     license: 'P1',
     docsUrl: 'https://learn.microsoft.com/intune/remote-help/deploy#set-up-conditional-access-for-remote-help',
-    whyItMatters: "Microsoft's own deployment guidance is to exclude Remote Assistance Service from Conditional Access. That exclusion doesn't show up when you read a policy's name, and it means a helpdesk operator can drive a Remote Help session without the MFA the rest of the tenant enforces.",
+    whyItMatters: "Microsoft's own deployment guidance is to exclude Remote Assistance Service from Conditional Access. That exclusion doesn't show up when you read a policy's name, and it means a helpdesk operator can drive a Remote Help session without the MFA the rest of the tenant enforces. Covers attended sessions: an unattended session does not sign in to this service at all.",
     assessment: {
       personas: ['member', 'guest', 'admin'],
       target: { kind: 'app', appId: REMOTE_HELP_APP_ID, displayName: 'Remote Assistance Service' },
       platforms: REMOTE_HELP_PLATFORMS,
+      clientApps: REMOTE_HELP_CLIENT_APPS,
       expect: 'mfa',
     },
   },
@@ -440,12 +455,13 @@ export const BASELINE_CHECKS: readonly BaselineCheck[] = [
     categories: ['remoteWork', 'protectAdmin'],
     license: 'P1',
     docsUrl: 'https://learn.microsoft.com/intune/remote-help/plan#planning-considerations',
-    whyItMatters: "A helper holds elevated access to other people's devices, and Microsoft's planning guidance is to put Conditional Access in front of helper accounts for exactly that reason. A compromised helper account is a path onto every device it can reach, so the operator's own sign-in should demand a compliant device and phishing-resistant MFA. Assessed against the account mapped as Remote Help Operator — no synthetic persona can hold an Intune role.",
+    whyItMatters: "A helper holds elevated access to other people's devices, and Microsoft's planning guidance is to put Conditional Access in front of helper accounts for exactly that reason. A compromised helper account is a path onto every device it can reach, so the operator's own sign-in should demand a compliant device and phishing-resistant MFA. Assessed against the account mapped as Remote Help Operator — no synthetic persona can hold an Intune role. Covers attended sessions: an unattended session does not sign in to this service at all.",
     assessment: {
       personas: [],
       slot: REMOTE_HELP_OPERATOR_SLOT,
       target: { kind: 'app', appId: REMOTE_HELP_APP_ID, displayName: 'Remote Assistance Service' },
       platforms: REMOTE_HELP_PLATFORMS,
+      clientApps: REMOTE_HELP_CLIENT_APPS,
       expect: 'device-trust-and-phishing-resistant-mfa',
     },
   },

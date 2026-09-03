@@ -127,10 +127,11 @@ export function LimitationsDialog({
               <LimitationItem>
                 <strong>Remote Help</strong> — Conditional Access gates the helper's sign-in
                 only. The target device's compliance is an informational banner inside Remote
-                Help; no policy, real or simulated, can gate a session on it. Microsoft documents
-                Conditional Access for Remote Help as Windows and macOS only, and as not applying
-                to unattended access — the Baseline checks sweep those two platforms and say
-                nothing about unattended sessions.
+                Help; no policy, real or simulated, can gate a session on it. The Baseline checks
+                cover attended sessions on Windows and macOS, through browser and modern clients.
+                An unattended session takes a different route: it signs in to Microsoft Graph
+                rather than to Remote Assistance Service, so a policy naming that service does not
+                reach it, and neither do these checks.
               </LimitationItem>
               <LimitationItem>
                 <strong>Security info registration</strong> — Registering a method and browsing

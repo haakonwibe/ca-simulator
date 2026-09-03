@@ -47,42 +47,59 @@ export function ConsentBanner() {
           <ShieldAlert className="h-5 w-5 shrink-0 mt-0.5" style={{ color: COLORS.warning }} />
           <div className="space-y-3">
             <h3 className="text-sm font-semibold" style={{ color: COLORS.text }}>
-              Admin Consent Required
+              Cannot Read Conditional Access Policies
             </h3>
 
             <p className="text-sm leading-relaxed" style={{ color: COLORS.textMuted }}>
-              The permissions required by CA Simulator (such as{' '}
-              <code className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: COLORS.accent }}>
-                Policy.Read.All
-              </code>
-              ) require admin consent. Only tenant administrators can approve
-              these permissions.
+              Microsoft Graph refused the request. Two things are needed to read
+              policies, and either one can be missing.
             </p>
 
-            <div className="text-sm space-y-1.5" style={{ color: COLORS.textMuted }}>
-              <p className="leading-relaxed">
-                <span className="font-medium" style={{ color: COLORS.text }}>If you're an admin:</span>{' '}
-                Sign out and sign in again — you should see a consent prompt.
-              </p>
-              <p className="leading-relaxed">
-                <span className="font-medium" style={{ color: COLORS.text }}>If you're not an admin:</span>{' '}
-                Ask your tenant administrator to grant consent using this link:
-              </p>
-            </div>
+            {/* Consent and a directory role are independent requirements. The
+                banner used to name only the first, so anyone holding the second
+                half of the problem was told to sign in again and saw no prompt. */}
+            <div className="text-sm space-y-2.5" style={{ color: COLORS.textMuted }}>
+              <div className="space-y-1">
+                <p className="font-medium" style={{ color: COLORS.text }}>
+                  1. Admin consent for the app
+                </p>
+                <p className="leading-relaxed">
+                  <code className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: COLORS.accent }}>
+                    Policy.Read.All
+                  </code>{' '}
+                  and{' '}
+                  <code className="text-xs px-1 py-0.5 rounded" style={{ backgroundColor: 'rgba(59,130,246,0.1)', color: COLORS.accent }}>
+                    Directory.Read.All
+                  </code>{' '}
+                  can only be approved by a tenant administrator.
+                </p>
+                <a
+                  href={adminConsentUrl}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded hover:underline"
+                  style={{
+                    color: COLORS.accent,
+                    backgroundColor: 'rgba(59,130,246,0.1)',
+                  }}
+                >
+                  Admin consent link
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+              </div>
 
-            <a
-              href={adminConsentUrl}
-              target="_blank"
-              rel="noopener noreferrer"
-              className="inline-flex items-center gap-1.5 text-xs font-mono px-2 py-1 rounded hover:underline"
-              style={{
-                color: COLORS.accent,
-                backgroundColor: 'rgba(59,130,246,0.1)',
-              }}
-            >
-              Admin consent link
-              <ExternalLink className="h-3 w-3" />
-            </a>
+              <div className="space-y-1">
+                <p className="font-medium" style={{ color: COLORS.text }}>
+                  2. A directory role on your account
+                </p>
+                <p className="leading-relaxed">
+                  Consent alone is not enough. The signed-in account also needs
+                  one of Security Reader, Global Reader, Security Administrator
+                  or Conditional Access Administrator. Without one, the request
+                  is refused even when consent is already in place.
+                </p>
+              </div>
+            </div>
 
             <div className="pt-2">
               <Button
