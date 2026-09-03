@@ -64,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (766 tests, Vitest)
+npm test          # Run all engine tests (778 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -150,11 +150,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-65).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-67).
 
 ## Testing
 
-All 766 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 778 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, and the analytics allowlist. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 
@@ -194,6 +194,13 @@ All 766 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/service
 - Targets carry a `data-tour="..."` attribute; steps whose anchor doesn't resolve are dropped when the tour opens. `findAnchor` checks `getClientRects().length`, NOT just presence — the sidebar is hidden with `display: none`, not unmounted.
 - Auto-starts once per browser (`ca-sim:tour-seen`, the app's second and only other localStorage key), gated to ≥768px so it can't collide with `MobileNotice`. The header compass button replays it.
 - Only the geometry is tested — this project has no component tests.
+
+## Resources (v0.6.20)
+
+- `data/microsoftServices.ts` — curated, DOC-SOURCED first-party resources; the single source of truth for their display names (`WELL_KNOWN_APPS` spreads it). Tenant app discovery filters Microsoft-owned SPs out, so these are otherwise unreachable, and `mergeApplicationSources` excludes their ids so they never double up in Tenant Apps.
+- `caTarget`: `selectable` | `filter-only` | `unsupported` — a property of ENTRA, not of the simulator. **Microsoft Graph is `unsupported`** (umbrella resource; the portal answers "Resource unsupported in Conditional Access"), **Azure AD Graph is `filter-only`**. The sandbox add-control offers ONLY `selectable` ones — drafting an exclusion the portal refuses would show an undeployable fix. Community-sourced app IDs never go in the list; the custom app ID field covers them.
+- The engine does NOT model `applicationFilter`, and never modelled the pre-June-2026 baseline-scope exemption (results match the new enforcement).
+- MSAL: `lib/authErrors.ts` `isSilentRenewalFailure()` treats `timed_out` / `iframe_closed_prematurely` like `InteractionRequiredAuthError` — a lapsed session makes the hidden iframe time out rather than answer. `main.tsx` renders NOTHING when `window.parent !== window` (MSAL's renewal iframe is same-origin); mounting the SPA there burns the 10s budget and inflates page views.
 
 ## Conventions
 

@@ -14,7 +14,8 @@ import type { ClientAppType, DevicePlatform, RiskLevel, InsiderRiskLevel } from 
 import type { UserSearchResult } from '@/services/personaService';
 import { useUserSearch } from '@/hooks/useUserSearch';
 import { APP_BUNDLES } from '@/data/appBundles';
-import { REMOTE_HELP_APP_ID } from '@/data/baselineChecks';
+import { MICROSOFT_SERVICES, MICROSOFT_SERVICE_IDS, CA_TARGET_BADGE, getMicrosoftService } from '@/data/microsoftServices';
+import { isGuid } from '@/lib/guid';
 import { AboutDialog } from '@/components/AboutDialog';
 
 import { Button } from '@/components/ui/button';
@@ -54,9 +55,13 @@ import {
   Target,
   Fingerprint,
   Bot,
+  Info,
 } from 'lucide-react';
 
 const GENERIC_AGENT_ID = 'generic-agent';
+
+/** Picker sentinel for "Other app ID…" — the real id lives in `customAppId`. */
+const CUSTOM_APP_ID = '__custom__';
 
 const IDENTITY_TYPE_OPTIONS = [
   { value: 'user', label: 'User' },
@@ -156,6 +161,17 @@ const TARGET_MODE_OPTIONS = [
   { value: 'authContext', label: 'Authentication Context', description: 'Extra controls for tagged sites and labels' },
 ] as const;
 
+/**
+ * The resources a user reaches while managing their own security info. Selecting
+ * one is the portal half of the story; the registration flow is a user action,
+ * and no single policy — or scenario — covers both.
+ */
+const SECURITY_INFO_PORTAL_IDS: ReadonlySet<string> = new Set([
+  '19db86c3-b2b9-44cc-b339-36da233a3be2', // My Sign-ins
+  '0000000c-0000-0000-c000-000000000000', // Microsoft App Access Panel
+  '8c59ead7-d703-4a27-9e55-c96a0054c8d2', // My Profile
+]);
+
 const USER_ACTION_OPTIONS = [
   { value: 'registerSecurityInformation', label: 'Register security information' },
   { value: 'registerOrJoinDevices', label: 'Register or join devices' },
@@ -195,6 +211,7 @@ export function ScenarioPanel() {
   const [userAction, setUserAction] = useState<string>('registerSecurityInformation');
   const [authContext, setAuthContext] = useState<string>('c1');
   const [appId, setAppId] = useState('All');
+  const [customAppId, setCustomAppId] = useState('');
   const [platform, setPlatform] = useState('any');
   const [clientApp, setClientApp] = useState<ClientAppType>('browser');
   const [signInRisk, setSignInRisk] = useState<RiskLevel | 'none'>('none');
@@ -325,10 +342,29 @@ export function ScenarioPanel() {
 
   const tenantApplications = usePolicyStore((s) => s.tenantApplications);
 
+  // Curated Microsoft services have their own group; the sample tenant list
+  // carries one of them (Azure management), so drop it here rather than list it twice.
   const tenantApps = useMemo(() =>
-    tenantApplications.map((app) => ({ value: app.appId, label: app.displayName })),
+    tenantApplications
+      .filter((app) => !MICROSOFT_SERVICE_IDS.has(app.appId))
+      .map((app) => ({ value: app.appId, label: app.displayName })),
     [tenantApplications],
   );
+
+  // "Other app ID…" — the id copied from a sign-in log's Target resource column.
+  // Only a well-formed GUID counts; the sentinel itself must never reach the engine.
+  const trimmedCustomAppId = customAppId.trim().toLowerCase();
+  const effectiveAppId: string | null =
+    appId === CUSTOM_APP_ID ? (isGuid(trimmedCustomAppId) ? trimmedCustomAppId : null) : appId;
+
+  const describeApp = (id: string): string =>
+    id === 'AllAgentIdResources'
+      ? 'All Agent Resources'
+      : getMicrosoftService(id)?.displayName
+        ?? APP_BUNDLES.find((b) => b.id === id)?.displayName
+        ?? tenantApps.find((a) => a.value === id)?.label
+        ?? displayNames.get(id)
+        ?? `App ${id.slice(0, 8)}…`;
 
   // Agent identities referenced by loaded policies (plus a synthetic generic)
   const agentOptions = useMemo(() => {
@@ -354,11 +390,14 @@ export function ScenarioPanel() {
   // ── Evaluate ──────────────────────────────────────────────────────
 
   const canEvaluate =
-    policies.length > 0 && (identityType === 'agentIdentity' || selectedPersona !== null);
+    policies.length > 0 &&
+    (identityType === 'agentIdentity' || selectedPersona !== null) &&
+    (targetMode !== 'resources' || effectiveAppId !== null);
 
   const handleEvaluate = (trigger: EventTrigger) => {
     const isAgentIdentity = identityType === 'agentIdentity';
     if (!isAgentIdentity && !selectedPersona) return;
+    if (targetMode === 'resources' && effectiveAppId === null) return;
 
     const application = targetMode === 'userActions'
       ? {
@@ -373,16 +412,16 @@ export function ScenarioPanel() {
           authenticationContext: authContext,
         }
       : {
-          appId,
+          appId: effectiveAppId!,
           displayName:
-            appId === 'AllAgentIdResources'
+            effectiveAppId === 'AllAgentIdResources'
               ? 'All Agent Resources'
-              : appId === REMOTE_HELP_APP_ID
-              ? 'Remote Help'
-              : APP_BUNDLES.find((b) => b.id === appId)?.displayName
-                ?? tenantApps.find((a) => a.value === appId)?.label
-                ?? appId,
-          ...(appId === 'AllAgentIdResources' ? { isAgentResource: true } : {}),
+              : getMicrosoftService(effectiveAppId!)?.displayName
+                ?? APP_BUNDLES.find((b) => b.id === effectiveAppId)?.displayName
+                ?? tenantApps.find((a) => a.value === effectiveAppId)?.label
+                ?? displayNames.get(effectiveAppId!)
+                ?? `App ${effectiveAppId!.slice(0, 8)}…`,
+          ...(effectiveAppId === 'AllAgentIdResources' ? { isAgentResource: true } : {}),
         };
 
     const context: SimulationContext = {
@@ -796,7 +835,13 @@ export function ScenarioPanel() {
               <SelectTrigger className="h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="overflow-y-auto" position="popper" style={{ maxHeight: 'clamp(200px, 50vh, 70vh)' }}>
+              {/* Width pinned to the trigger: item descriptions wrap instead of
+                  stretching the popper across the window. */}
+              <SelectContent
+                className="w-[var(--radix-select-trigger-width)] overflow-y-auto"
+                position="popper"
+                style={{ maxHeight: 'clamp(200px, 50vh, 70vh)' }}
+              >
                 <SelectGroup>
                   <SelectLabel className="text-[10px] text-muted-foreground">Bundles</SelectLabel>
                   {APP_BUNDLES.map((bundle) => (
@@ -812,13 +857,25 @@ export function ScenarioPanel() {
                   <SelectItem value="AllAgentIdResources" className="text-xs">
                     All Agent Resources
                   </SelectItem>
-                  <SelectItem
-                    value={REMOTE_HELP_APP_ID}
-                    className="text-xs"
-                    description="Intune Remote Help — Microsoft's guidance is to exclude it from CA"
-                  >
-                    Remote Help
-                  </SelectItem>
+                </SelectGroup>
+                {/* First-party resources. Tenant app discovery filters out
+                    Microsoft-owned service principals, so these never reach the
+                    Tenant Apps group — yet they are what sign-in logs name when
+                    an allowlist policy blocks something unexpected. */}
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] text-muted-foreground">Microsoft services</SelectLabel>
+                  {MICROSOFT_SERVICES.map((service) => (
+                    <SelectItem
+                      key={service.appId}
+                      value={service.appId}
+                      className="text-xs"
+                      description={service.summary}
+                      badge={CA_TARGET_BADGE[service.caTarget] ?? undefined}
+                    >
+                      {service.displayName}
+                    </SelectItem>
+                  ))}
                 </SelectGroup>
                 {tenantApps.length > 0 && (
                   <>
@@ -833,8 +890,42 @@ export function ScenarioPanel() {
                     </SelectGroup>
                   </>
                 )}
+                <SelectSeparator />
+                <SelectGroup>
+                  <SelectLabel className="text-[10px] text-muted-foreground">Custom</SelectLabel>
+                  <SelectItem
+                    value={CUSTOM_APP_ID}
+                    className="text-xs"
+                    description="Paste the application ID from a sign-in log's Target resource"
+                  >
+                    Other app ID…
+                  </SelectItem>
+                </SelectGroup>
               </SelectContent>
             </Select>
+            {/* Registration and the portal are different targets, and a policy is
+                only ever in one mode — point at the other one from each side. */}
+            {SECURITY_INFO_PORTAL_IDS.has(effectiveAppId ?? '') && (
+              <CrossModeHint>
+                Registering a method is a separate scenario: Target Resource → User Actions.
+              </CrossModeHint>
+            )}
+            {appId === CUSTOM_APP_ID && (
+              <div className="mt-1.5">
+                <Input
+                  placeholder="00000000-0000-0000-0000-000000000000"
+                  value={customAppId}
+                  onChange={(e) => { clearResults(); setCustomAppId(e.target.value.trim()); }}
+                  className="h-8 text-xs font-mono"
+                  spellCheck={false}
+                />
+                {customAppId.length > 0 && !isGuid(customAppId) && (
+                  <p className="mt-1 text-[10px]" style={{ color: COLORS.textDim }}>
+                    Enter the application (client) ID as a GUID.
+                  </p>
+                )}
+              </div>
+            )}
           </div>
         )}
 
@@ -854,6 +945,11 @@ export function ScenarioPanel() {
                 ))}
               </SelectContent>
             </Select>
+            {userAction === 'registerSecurityInformation' && (
+              <CrossModeHint>
+                The portal itself is a separate scenario: Resources → My Sign-ins.
+              </CrossModeHint>
+            )}
           </div>
         )}
 
@@ -1115,6 +1211,20 @@ function PersonaRoles({
       {names.join(', ')}
       {unresolved > 0 && ` +${unresolved} more`}
     </span>
+  );
+}
+
+/**
+ * Points at the other targeting mode. A policy targets resources OR user actions,
+ * never both, so answering "can this person update their security info?" takes
+ * more than one run — say so where the choice is being made.
+ */
+function CrossModeHint({ children }: { children: React.ReactNode }) {
+  return (
+    <p className="mt-1.5 flex items-start gap-1 text-[10px] leading-relaxed" style={{ color: COLORS.textDim }}>
+      <Info className="mt-px h-2.5 w-2.5 shrink-0" />
+      <span>{children}</span>
+    </p>
   );
 }
 

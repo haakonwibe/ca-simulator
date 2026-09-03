@@ -22,7 +22,8 @@ A Conditional Access policy simulator for Microsoft Entra ID. Evaluate sign-in s
 - **Deterministic engine** matching Microsoft's What If tool — 741 unit tests verify accuracy
 - **11 condition matchers** — User, Application, DevicePlatform, Location, ClientApp, Risk, DeviceFilter, AuthenticationFlow, InsiderRisk, ClientApplications (agents), AgentRisk
 - **Guided tour** — on a first visit, coach marks introduce each part of the interface in turn: where to load policies, where to describe a sign-in, and what sits behind each of the six tabs. Replayable at any time from the header
-- **Sample mode** for instant demo — 23 policies and 6 personas, no Azure tenant required
+- **Sample mode** for instant demo — 24 policies and 6 personas, no Azure tenant required
+- **First-party resources** in the simulation context — Microsoft Graph, Azure AD Graph, My Sign-ins, My Apps and more, plus any app ID pasted from a sign-in log, with a note when a resource is one no policy can name
 - **Live tenant connection** via MSAL + Microsoft Graph API
 - **Graceful permission handling** — friendly admin consent banner when tenant permissions are missing
 - **Privacy by construction** — your tenant data never leaves the browser; anonymous usage events come from a fixed, published allowlist that cannot carry policy names, identifiers, or results, and can be switched off in-app or via Do Not Track
@@ -37,7 +38,7 @@ npm install
 npm run dev
 ```
 
-Open `http://localhost:5173` and click **Use Sample Data** to explore with 23 demo policies and 6 personas — no Azure tenant required.
+Open `http://localhost:5173` and click **Use Sample Data** to explore with 24 demo policies and 6 personas — no Azure tenant required.
 
 ## Live Tenant Connection
 

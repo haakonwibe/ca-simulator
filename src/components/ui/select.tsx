@@ -111,8 +111,8 @@ SelectLabel.displayName = SelectPrimitive.Label.displayName
 
 const SelectItem = React.forwardRef<
   React.ElementRef<typeof SelectPrimitive.Item>,
-  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: string }
->(({ className, children, description, ...props }, ref) => (
+  React.ComponentPropsWithoutRef<typeof SelectPrimitive.Item> & { description?: string; badge?: string }
+>(({ className, children, description, badge, ...props }, ref) => (
   <SelectPrimitive.Item
     ref={ref}
     className={cn(
@@ -127,10 +127,19 @@ const SelectItem = React.forwardRef<
       </SelectPrimitive.ItemIndicator>
     </span>
 
-    <div>
-      <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+    {/* min-w-0 lets the description wrap instead of widening the popper */}
+    <div className="min-w-0">
+      <span className="flex flex-wrap items-center gap-1.5">
+        <SelectPrimitive.ItemText>{children}</SelectPrimitive.ItemText>
+        {/* Outside ItemText: the trigger shows the name alone, not the tag */}
+        {badge && (
+          <span className="rounded border px-1 py-0 text-[9px] font-normal uppercase tracking-wide opacity-80">
+            {badge}
+          </span>
+        )}
+      </span>
       {description && (
-        <p className="text-[10px] text-muted-foreground font-normal">{description}</p>
+        <p className="whitespace-normal text-[10px] text-muted-foreground font-normal">{description}</p>
       )}
     </div>
   </SelectPrimitive.Item>

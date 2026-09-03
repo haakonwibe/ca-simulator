@@ -6,6 +6,7 @@
 
 import type { UserContext } from '../engine/models/SimulationContext';
 import { graphFetch, fetchAllPages } from './graphClient';
+import { isGuid } from '../lib/guid';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -44,7 +45,7 @@ export async function fetchDefaultUsers(token: string): Promise<UserSearchResult
 // ── 2. Resolve User Context ─────────────────────────────────────────
 
 export async function resolveUserContext(token: string, userId: string): Promise<UserContext> {
-  if (!/^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i.test(userId)) {
+  if (!isGuid(userId)) {
     throw new Error('Invalid user ID format');
   }
 

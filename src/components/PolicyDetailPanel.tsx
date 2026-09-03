@@ -4,9 +4,11 @@ import { usePolicyStore } from '@/stores/usePolicyStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS, CATEGORY_META } from '@/data/theme';
 import { resolveAssignmentEntryName } from '@/lib/sandboxDiff';
+import { isGuid } from '@/lib/guid';
 import type { ConditionalAccessPolicy, GuestOrExternalUserCondition } from '@/engine/models/Policy';
 import type { PolicyEvaluationResult, ConditionMatchResult, ExtractedSessionControls } from '@/engine/models/EvaluationResult';
-import { X, CheckCircle2, XCircle, Minus, AlertTriangle, Undo2 } from 'lucide-react';
+import { X, CheckCircle2, XCircle, Minus, AlertTriangle, Undo2, GraduationCap } from 'lucide-react';
+import { getSampleLesson } from '@/data/sampleLessons';
 import { Badge } from '@/components/ui/badge';
 import { SandboxStateControl } from '@/components/SandboxStateControl';
 import { SandboxAssignmentEditor } from '@/components/SandboxAssignmentEditor';
@@ -63,6 +65,7 @@ export function PolicyDetailPanel() {
             onClose={() => setSelectedPolicyId(null)}
           />
           <Separator />
+          <SampleLessonNote policyId={policy.id} />
           {sandboxActive && (
             <>
               <SandboxAssignmentEditor policyId={policy.id} />
@@ -182,6 +185,49 @@ function PanelHeader({
         <X className="h-4 w-4" />
       </button>
     </div>
+  );
+}
+
+/**
+ * Why a sample policy is shaped the way it is, and one thing to try.
+ *
+ * Demo mode only: these describe the sample tenant's deliberate flaws and
+ * subtleties, and would be nonsense sitting on a real tenant's policy.
+ */
+function SampleLessonNote({ policyId }: { policyId: string }) {
+  const dataSource = usePolicyStore((s) => s.dataSource);
+  if (dataSource !== 'sample') return null;
+
+  const lesson = getSampleLesson(policyId);
+  if (!lesson) return null;
+
+  return (
+    <>
+      <div className="px-4 py-3">
+        <div
+          className="rounded-md border p-3"
+          style={{ borderColor: 'rgba(59, 130, 246, 0.3)', backgroundColor: COLORS.selectedBg }}
+        >
+          <div className="mb-1 flex items-center gap-1.5">
+            <GraduationCap className="h-3 w-3 shrink-0" style={{ color: COLORS.accentLight }} />
+            <span className="text-[10px] font-semibold uppercase tracking-wider" style={{ color: COLORS.accentLight }}>
+              What this demonstrates
+            </span>
+          </div>
+          <p className="text-xs font-medium" style={{ color: COLORS.text }}>
+            {lesson.title}
+          </p>
+          <p className="mt-1 text-[11px] leading-relaxed" style={{ color: COLORS.textMuted }}>
+            {lesson.body}
+          </p>
+          <p className="mt-2 text-[11px] leading-relaxed" style={{ color: COLORS.textDim }}>
+            <span style={{ color: COLORS.accentLight }}>Try this: </span>
+            {lesson.tryThis}
+          </p>
+        </div>
+      </div>
+      <Separator />
+    </>
   );
 }
 
@@ -429,12 +475,10 @@ function formatGuestCondition(g: GuestOrExternalUserCondition): string {
   return `Guests (${types.join(', ')})`;
 }
 
-const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-
 function resolveName(id: string, displayNames: Map<string, string>, kind: 'user' | 'app' = 'user'): string {
   const name = resolveAssignmentEntryName(id, displayNames, kind);
   // Unresolvable GUID — truncate rather than flooding the line
-  return GUID_RE.test(id) && name === id ? `${id.slice(0, 8)}…` : name;
+  return isGuid(id) && name === id ? `${id.slice(0, 8)}…` : name;
 }
 
 function describeUserLines(

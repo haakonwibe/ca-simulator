@@ -3,14 +3,14 @@
 // The MSAL instance is managed by useAuthStore (deferred initialization).
 // This module exports getAccessToken() which reads the instance from the store.
 
-import { InteractionRequiredAuthError } from '@azure/msal-browser';
 import { loginRequest } from '../authConfig';
 import { useAuthStore } from '../stores/useAuthStore';
+import { isSilentRenewalFailure } from '../lib/authErrors';
 
 // Concurrent getAccessToken calls (e.g. policy load + persona resolution) can
-// both hit InteractionRequiredAuthError; a second acquireTokenRedirect while
-// the first is starting throws interaction_in_progress. Only the first caller
-// triggers the redirect.
+// both hit a renewal failure; a second acquireTokenRedirect while the first is
+// starting throws interaction_in_progress. Only the first caller triggers the
+// redirect.
 let redirectInProgress = false;
 
 /**
@@ -40,7 +40,10 @@ export async function getAccessToken(): Promise<string> {
     });
     return response.accessToken;
   } catch (error) {
-    if (error instanceof InteractionRequiredAuthError) {
+    // Interaction-required and a timed-out hidden iframe are the same situation
+    // with and without an answer from Entra: the session is gone, so send the
+    // user to sign in rather than surfacing an MSAL error code.
+    if (isSilentRenewalFailure(error)) {
       if (!redirectInProgress) {
         redirectInProgress = true;
         await msalInstance.acquireTokenRedirect(loginRequest);

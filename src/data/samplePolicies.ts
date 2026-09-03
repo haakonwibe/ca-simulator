@@ -738,6 +738,40 @@ export const SAMPLE_POLICIES: ConditionalAccessPolicy[] = [
     },
     sessionControls: null,
   },
+
+  // 24. The MFA floor on Remote Help — the third policy in the Remote Help set.
+  // CA004 excludes Remote Assistance Service so a non-compliant sharer can still
+  // be helped; that exclusion must not take MFA with it. Without this policy the
+  // only MFA reaching Remote Help is CA019, which covers untrusted locations
+  // only, leaving members and guests on a trusted network with nothing.
+  // clientAppTypes is empty on purpose: every client, not just the browser.
+  {
+    id: 'ca-policy-024-mfa-remote-help',
+    displayName: 'CA024: Require MFA for Remote Help',
+    state: 'enabled',
+    conditions: {
+      users: {
+        includeUsers: ['All'],
+        excludeUsers: ['break-glass-admin'],
+        includeGroups: [],
+        excludeGroups: [],
+        includeRoles: [],
+        excludeRoles: [],
+      },
+      applications: {
+        includeApplications: [REMOTE_HELP_APP_ID],
+        excludeApplications: [],
+      },
+      clientAppTypes: [],
+      signInRiskLevels: [],
+      userRiskLevels: [],
+    },
+    grantControls: {
+      operator: 'OR',
+      builtInControls: ['mfa'],
+    },
+    sessionControls: null,
+  },
 ];
 
 /** Display names for GUIDs referenced in sample policies. */

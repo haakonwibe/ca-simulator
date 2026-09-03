@@ -17,6 +17,20 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.20',
+    subtitle: 'Microsoft services',
+    features: [
+      {
+        heading: 'Simulate the Resources a Policy Cannot Name',
+        body: 'A policy that blocks everything except a named list of apps will still block things, because some resources are never in that list. Microsoft Graph is the clearest case: it is an umbrella resource, the portal refuses to add it to either list, and a sign-in that lands on it therefore matches the All-resources rule no matter how long the exclusion list is. The Simulation Context now offers a Microsoft services group — Graph, Azure AD Graph, My Sign-ins, My Apps, My Profile, the App Access Panel and more — none of which appear in tenant app discovery because Microsoft owns them. Choosing one that no policy can name shows the reason alongside the verdict. There is also a field for any application identifier copied straight from a sign-in log, and the sandbox offers only resources a policy can genuinely target, so a suggested fix is never one the portal would reject.',
+      },
+      {
+        heading: 'Returning After a Long Break',
+        body: 'Coming back to a tab left open overnight could end in a raw authentication error rather than a sign-in prompt. When the session behind it has lapsed, the silent renewal has nothing to renew and simply times out. That case is now treated the same as any other expired session, so it takes you to sign in.',
+      },
+    ],
+  },
+  {
     version: 'v0.6.18',
     subtitle: 'Remote Help',
     features: [

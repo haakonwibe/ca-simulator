@@ -21,6 +21,8 @@ import { resolveAssignmentEntryName } from '@/lib/sandboxDiff';
 import { UserSearchInput } from '@/components/UserSearchInput';
 import type { UserSearchResult } from '@/services/personaService';
 import { APP_BUNDLES } from '@/data/appBundles';
+import { MICROSOFT_SERVICES, MICROSOFT_SERVICE_IDS, isNameableInPolicy } from '@/data/microsoftServices';
+import { isGuid } from '@/lib/guid';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -30,8 +32,6 @@ import {
 } from '@/components/ui/dropdown-menu';
 import { X, Plus, Undo2 } from 'lucide-react';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
-
-const GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
 /** Special values are exclusive of (or replace) other entries per Entra rules. */
 function withValueAdded(current: string[], value: string): string[] {
@@ -148,12 +148,12 @@ function FieldRow({
 // ── Chips ───────────────────────────────────────────────────────────
 
 function chipTitle(value: string, name: string): string | undefined {
-  return GUID_RE.test(value) && name === value ? value : undefined;
+  return isGuid(value) && name === value ? value : undefined;
 }
 
 function shortName(value: string, name: string): string {
   // Unresolvable GUID — truncate, full id in tooltip
-  if (GUID_RE.test(value) && name === value) return `${value.slice(0, 8)}…`;
+  if (isGuid(value) && name === value) return `${value.slice(0, 8)}…`;
   return name;
 }
 
@@ -372,7 +372,15 @@ function AppAddControl({
     // 'All' only valid in the include direction
     ...(field === 'includeApplications' ? [{ id: 'All', label: 'All cloud apps' }] : []),
     ...APP_BUNDLES.map((b) => ({ id: b.id, label: b.displayName })),
-    ...tenantApplications.map((app) => ({ id: app.appId, label: app.displayName })),
+    // Only resources a policy can actually name. Microsoft Graph and Azure AD
+    // Graph are deliberately absent: the portal refuses to list them, so
+    // offering them here would draft a change that cannot be deployed.
+    ...MICROSOFT_SERVICES.filter(isNameableInPolicy).map((s) => ({ id: s.appId, label: s.displayName })),
+    // Curated services are listed above; the sample tenant list carries one of
+    // them (Azure management), so filter it out rather than offer it twice.
+    ...tenantApplications
+      .filter((app) => !MICROSOFT_SERVICE_IDS.has(app.appId))
+      .map((app) => ({ id: app.appId, label: app.displayName })),
   ].filter((opt) => !effectiveValues.includes(opt.id));
 
   return (

@@ -45,7 +45,7 @@ export function LimitationsDialog({
             </ul>
           </Section>
 
-          <Section title="App bundle accuracy">
+          <Section title="Resources and bundles">
             <p>
               The built-in app bundles Office365 and MicrosoftAdminPortals are based on verified
               app IDs from tenant queries and sign-in log tracing. However, Microsoft does not
@@ -57,6 +57,25 @@ export function LimitationsDialog({
               documentation implies — most admin centers authenticate through the Office 365 Shell
               rather than their own app registrations.
             </p>
+            <ul className="space-y-2 mt-2">
+              <LimitationItem>
+                <strong>Microsoft Graph</strong> — evaluated as a plain resource. Entra treats it
+                as an umbrella and evaluates the underlying service a Graph token is for, so a real
+                sign-in may be judged against an Exchange or SharePoint policy that the simulator
+                does not attribute to it.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Baseline scopes</strong> — the simulator has never modelled the legacy
+                exemption that let sign-ins requesting only baseline scopes bypass an All-resources
+                policy that carries exclusions. Microsoft began removing that exemption in June
+                2026, so results match the new behaviour, not a tenant that has opted to keep the
+                old one.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Application filters</strong> — policies that scope resources by a custom
+                security attribute filter are not evaluated on that filter.
+              </LimitationItem>
+            </ul>
           </Section>
 
           <Section title="Agent identities">
@@ -112,6 +131,14 @@ export function LimitationsDialog({
                 Conditional Access for Remote Help as Windows and macOS only, and as not applying
                 to unattended access — the Baseline checks sweep those two platforms and say
                 nothing about unattended sessions.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Security info registration</strong> — Registering a method and browsing
+                the My Sign-ins portal are different targets, and a policy is only ever in one
+                mode. A policy on the portal does not cover a registration forced during sign-in
+                to another app; the Register security information user action does not cover the
+                portal itself. An All-resources policy is evaluated in both here. Microsoft does
+                not document that combination.
               </LimitationItem>
               <LimitationItem>
                 Named location matching requires manual selection (Trusted/Untrusted) — no

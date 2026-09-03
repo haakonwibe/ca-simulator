@@ -125,3 +125,17 @@ describe('mergeApplicationSources', () => {
     expect(result[0].displayName).toBe('abc-123-guid');
   });
 });
+
+describe('mergeApplicationSources — curated Microsoft services', () => {
+  it('filters them out of every source: they live in their own picker group', () => {
+    const enterprise = [{ appId: '2793995e-0a7d-40d7-bd35-6968ba142197', displayName: 'My Apps' }];
+    const policy = new Map([
+      ['00000003-0000-0000-c000-000000000000', 'Microsoft Graph'],
+      ['x1', 'Line-of-business app'],
+    ]);
+
+    const result = mergeApplicationSources(enterprise, [], policy);
+
+    expect(result.map((a) => a.appId)).toEqual(['x1']);
+  });
+});

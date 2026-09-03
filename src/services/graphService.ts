@@ -28,6 +28,7 @@ import { graphFetch, graphPost, fetchAllPages, GraphPermissionError } from './gr
 import { resolveCustomAuthStrengthTier, AUTH_STRENGTH_HIERARCHY } from '../engine/authenticationStrength';
 import type { TenantApplication } from '../types/TenantApplication';
 import { BUNDLE_IDS, BUNDLED_APP_IDS } from '../data/appBundles';
+import { MICROSOFT_SERVICES, MICROSOFT_SERVICE_IDS } from '../data/microsoftServices';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -53,9 +54,11 @@ const WELL_KNOWN_APPS: Record<string, string> = {
   'AllAgentIdResources': 'All Agent Resources',
   '00000002-0000-0ff1-ce00-000000000000': 'Office 365 Exchange Online',
   '00000003-0000-0ff1-ce00-000000000000': 'Office 365 SharePoint Online',
-  '00000003-0000-0000-c000-000000000000': 'Microsoft Graph',
-  '797f4846-ba00-4fd7-ba43-dac1f8f63013': 'Azure Service Management',
-  '1dee7b72-b80d-4e56-933d-8b6b04f9a3e2': 'Remote Assistance Service',
+  // First-party resources: one curated list feeds the picker, the sandbox and this map.
+  // Most have no service principal the tenant can be asked about (Graph, Azure AD
+  // Graph) or are filtered out of discovery as Microsoft-owned, so the static name
+  // is the only one that works.
+  ...Object.fromEntries(MICROSOFT_SERVICES.map((s) => [s.appId, s.displayName])),
 };
 
 const WELL_KNOWN_ROLES: Record<string, string> = {
@@ -624,7 +627,9 @@ export function mergeApplicationSources(
   appRegistrations: Array<{ appId: string; displayName: string }>,
   policyApps: Map<string, string>,
 ): TenantApplication[] {
-  const excluded = new Set([...BUNDLE_IDS, ...BUNDLED_APP_IDS, 'None']);
+  // Curated Microsoft services have their own picker group — a policy that
+  // references My Apps must not produce a second, duplicate entry here.
+  const excluded = new Set([...BUNDLE_IDS, ...BUNDLED_APP_IDS, ...MICROSOFT_SERVICE_IDS, 'None']);
   const seen = new Map<string, TenantApplication>();
 
   // 1. Enterprise apps — highest priority

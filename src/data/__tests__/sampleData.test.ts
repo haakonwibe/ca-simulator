@@ -9,6 +9,7 @@ import { describe, it, expect } from 'vitest';
 import { SAMPLE_POLICIES, SAMPLE_DISPLAY_NAMES } from '../samplePolicies';
 import { SAMPLE_PERSONAS } from '../samplePersonas';
 import { REMOTE_HELP_APP_ID } from '../baselineChecks';
+import { assessBaseline } from '@/lib/baselineAssessment';
 
 const SPECIAL_VALUES = new Set([
   'All',
@@ -55,7 +56,7 @@ describe('sample tenant', () => {
     expect(new Set(SAMPLE_PERSONAS.map((p) => p.id)).size).toBe(SAMPLE_PERSONAS.length);
   });
 
-  // The Remote Help pair: the baseline compliance policy excludes the service so
+  // The Remote Help set: the baseline compliance policy excludes the service so
   // non-compliant sharers can be helped; the operator policy covers the helpers.
   it('models the two-policy Remote Help design', () => {
     const baseline = SAMPLE_POLICIES.find((p) => p.id === 'ca-policy-004-compliant-device')!;
@@ -66,8 +67,25 @@ describe('sample tenant', () => {
     expect(operators.conditions.users.includeGroups).toEqual(['group-helpdesk']);
     expect(operators.grantControls?.operator).toBe('AND');
 
+    // CA004's exclusion is about device compliance only — MFA still has to reach
+    // the service, and CA019 alone leaves trusted locations uncovered.
+    const mfaFloor = SAMPLE_POLICIES.find((p) => p.id === 'ca-policy-024-mfa-remote-help')!;
+    expect(mfaFloor.conditions.applications.includeApplications).toEqual([REMOTE_HELP_APP_ID]);
+    expect(mfaFloor.conditions.clientAppTypes).toEqual([]); // every client, not just browser
+    expect(mfaFloor.grantControls?.builtInControls).toContain('mfa');
+
     const morgan = SAMPLE_PERSONAS.find((p) => p.id === 'sample-user-6')!;
     expect(morgan.memberOfGroupIds).toContain('group-helpdesk');
     expect(morgan.directoryRoleIds).toEqual([]);
+  });
+
+  // Pins the coverage the sample tenant is meant to demonstrate. Narrowing CA024,
+  // or excluding Remote Help from CA019, drops this back to partial.
+  it('gives Remote Help full MFA coverage, trusted locations included', () => {
+    const authMap = new Map([['00000000-0000-0000-0000-000000000099', 3]]);
+    const result = assessBaseline([...SAMPLE_POLICIES], authMap);
+    const check = result.checks.find((c) => c.check.id === 'require-mfa-remote-help')!;
+    expect(check.status, check.failingExamples.join(' | ')).toBe('pass');
+    expect(check.scenariosPassed).toBe(check.scenariosTotal);
   });
 });

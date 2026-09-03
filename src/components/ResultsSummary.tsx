@@ -5,6 +5,7 @@ import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { CAEngine } from '@/engine/CAEngine';
 import { describeVerdict } from '@/lib/impactAnalysis';
+import { getMicrosoftService } from '@/data/microsoftServices';
 import { COLORS } from '@/data/theme';
 import type {
   CAEngineResult,
@@ -136,6 +137,7 @@ export function ResultsSummary() {
   return (
     <div className="space-y-4 p-4">
       <VerdictBanner result={result} liveResult={liveResult} />
+      <TargetabilityNote />
       {result.finalDecision === 'controlsRequired' && (
         <RequiredControls result={result} />
       )}
@@ -168,6 +170,45 @@ export function ResultsSummary() {
         selectedPolicyId={selectedPolicyId}
       />
     </div>
+  );
+}
+
+/**
+ * Some resources cannot be named in a policy at all. Say so on the verdict,
+ * because that is the moment the question arises: an allowlist policy that
+ * blocks a Graph sign-in looks like a policy bug until you know Graph is the
+ * umbrella resource and no exclusion list can contain it.
+ */
+function TargetabilityNote() {
+  const lastContext = useEvaluationStore((s) => s.lastContext);
+  const appId = lastContext?.application.appId;
+  const service = appId ? getMicrosoftService(appId) : undefined;
+  if (!service || service.caTarget === 'selectable') return null;
+
+  return (
+    <Card
+      className="overflow-hidden p-0"
+      style={{ backgroundColor: COLORS.bgCard, borderColor: COLORS.border, borderLeftWidth: 3, borderLeftColor: COLORS.warning }}
+    >
+      <div className="flex items-start gap-2 px-3 py-2">
+        <AlertTriangle className="mt-0.5 h-3.5 w-3.5 shrink-0" style={{ color: COLORS.warning }} />
+        <div className="min-w-0 text-xs" style={{ color: COLORS.textMuted }}>
+          <span className="font-medium" style={{ color: COLORS.text }}>
+            {service.displayName}
+          </span>{' '}
+          {service.description}{' '}
+          <a
+            href={service.docsUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="hover:underline"
+            style={{ color: COLORS.accentLight }}
+          >
+            Microsoft docs
+          </a>
+        </div>
+      </div>
+    </Card>
   );
 }
 
