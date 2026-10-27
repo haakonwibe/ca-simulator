@@ -68,7 +68,18 @@ export function PolicyDetailPanel() {
           <SampleLessonNote policyId={policy.id} />
           {sandboxActive && (
             <>
-              <SandboxAssignmentEditor policyId={policy.id} />
+              {/* A rule's assignments are its plan's plus its own; editing the
+                  combined lists could drop a plan-level exclusion, which Entra
+                  does not allow. State is the rule's alone. */}
+              {policy.plan ? (
+                <p className="px-4 py-3 text-[11px] leading-relaxed" style={{ color: COLORS.textMuted }}>
+                  This rule's assignments are set in the policy plan{' '}
+                  <span style={{ color: COLORS.text }}>{policy.plan.displayName}</span> in the Entra
+                  admin center. The sandbox can change the rule's state, not its assignments.
+                </p>
+              ) : (
+                <SandboxAssignmentEditor policyId={policy.id} />
+              )}
               <Separator />
             </>
           )}
@@ -175,6 +186,16 @@ function PanelHeader({
             <meta.icon className="h-3 w-3" />
             {meta.label}
           </Badge>
+          {policy.plan && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0"
+              style={{ borderColor: COLORS.border, color: COLORS.textMuted }}
+              title={`Rule in the policy plan ${policy.plan.displayName} (preview)`}
+            >
+              Plan rule
+            </Badge>
+          )}
         </div>
       </div>
       <button

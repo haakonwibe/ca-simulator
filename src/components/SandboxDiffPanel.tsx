@@ -258,8 +258,10 @@ export function SandboxDiffPanel({
                 Swept across 3 user types × 3 apps × 5 platforms × 4 client apps × 2 locations ×
                 4 sign-in risk × 4 user risk levels, plus agent grids (3 apps × 2 locations ×
                 4 agent risk levels per agent identity type). Posture uses the same weighted
-                scoring as the Impact view and is user-scoped; session-only control changes
-                (e.g. persistent browser) don't move these counts.
+                scoring as the Impact view and is user-scoped. A scenario changes when its
+                verdict, required controls or posture score does. Of the session controls only
+                sign-in frequency is scored, so a change to persistent browser alone doesn't
+                move these counts.
               </p>
             </>
           )}

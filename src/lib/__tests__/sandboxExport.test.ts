@@ -153,6 +153,29 @@ describe('buildChangePlan', () => {
     expect(body.sessionControls).toEqual({ persistentBrowser: { isEnabled: true, mode: 'never' } });
   });
 
+  it('a policy plan rule becomes a portal step, never a PATCH', () => {
+    const rule = createPolicy({
+      id: 'rule-1',
+      displayName: 'Admin plan › Require MFA for admins',
+      state: 'disabled',
+      plan: { id: 'plan-1', displayName: 'Admin plan' },
+    });
+    const plan = buildChangePlan([rule], { 'rule-1': 'enabled' }, {}, {}, undefined, NEW_STATE);
+    const portalPath = 'Conditional Access › Policy plans › Admin plan › Require MFA for admins';
+
+    expect(plan.modifications[0].portalPath).toBe(portalPath);
+    expect(plan.powershellScript).not.toContain('-Method PATCH');
+    expect(plan.powershellScript).toContain(`#    ${portalPath}`);
+    expect(plan.summaryMarkdown).toContain(`Change in the Entra admin center: ${portalPath}`);
+    expect(JSON.parse(plan.jsonDocument).modifications[0]).toEqual({
+      policyId: 'rule-1',
+      displayName: 'Admin plan › Require MFA for admins',
+      portalOnly: true,
+      portalPath,
+      state: 'enabled',
+    });
+  });
+
   it('PowerShell script contains connect, PATCH, POST, and the safety header', () => {
     const policy = createPolicy({ id: 'p1', state: 'enabled' });
     const drafts = { [templateDraftId('block-legacy-auth')]: draftFor('block-legacy-auth') };

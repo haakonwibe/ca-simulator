@@ -29,6 +29,7 @@ import { resolveCustomAuthStrengthTier, AUTH_STRENGTH_HIERARCHY } from '../engin
 import type { TenantApplication } from '../types/TenantApplication';
 import { BUNDLE_IDS, BUNDLED_APP_IDS } from '../data/appBundles';
 import { MICROSOFT_SERVICES, MICROSOFT_SERVICE_IDS } from '../data/microsoftServices';
+import { flattenPlans } from './policyPlans';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -109,6 +110,34 @@ async function fetchPolicies(token: string): Promise<{ raw: RawGraphPolicy[]; ag
     if (error instanceof GraphPermissionError) throw error; // consent problems are not endpoint problems
     const raw = await fetchAllPages<RawGraphPolicy>('/identity/conditionalAccess/policies', token);
     return { raw, agentDetailsUnavailable: true };
+  }
+}
+
+// ── 1b. Fetch Policy Plans (preview) ────────────────────────────────
+//
+// Rules in policy plans are not returned by /policies, beta or v1.0 —
+// verified against a live tenant. The portal reads them from this beta
+// endpoint, which returns each plan with its rules inline; it is not in
+// Graph's published schema yet. Rules come back flattened into policies
+// (services/policyPlans.ts). Any failure, a 403 included, leaves plans out
+// and flags them: a preview endpoint must not raise the consent banner or
+// stop the policies themselves from loading.
+
+const BETA_PLANS_URL = 'https://graph.microsoft.com/beta/identity/conditionalAccess/plans';
+
+async function fetchPlanRules(token: string): Promise<{ raw: RawGraphPolicy[]; plansUnavailable: boolean }> {
+  try {
+    const plans = await fetchAllPages<RawGraphPolicy>(BETA_PLANS_URL, token);
+    for (const plan of plans) {
+      // A plan can hold hundreds of rules; the inline list may be paged
+      const next = plan['rules@odata.nextLink'];
+      if (typeof next === 'string') {
+        plan.rules = [...(plan.rules ?? []), ...(await fetchAllPages<RawGraphPolicy>(next, token))];
+      }
+    }
+    return { raw: flattenPlans(plans), plansUnavailable: false };
+  } catch {
+    return { raw: [], plansUnavailable: true };
   }
 }
 
@@ -586,6 +615,7 @@ function normalizePolicies(
       sessionControls: normalizeSessionControls(raw.sessionControls),
       createdDateTime: raw.createdDateTime,
       modifiedDateTime: raw.modifiedDateTime,
+      ...(raw.planRef ? { plan: raw.planRef } : {}),
     };
   });
 }
@@ -722,10 +752,13 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   tenantApplications: TenantApplication[];
   /** True when the beta policy endpoint failed and v1.0 fallback was used — agent targeting is invisible */
   agentDetailsUnavailable: boolean;
+  /** True when the policy plans endpoint failed — rules in plans are not included */
+  plansUnavailable: boolean;
 }> {
-  // Fetch policies, named locations, and auth strength policies in parallel
-  const [{ raw: rawPolicies, agentDetailsUnavailable }, namedLocations, authStrengthMap] = await Promise.all([
+  // Fetch policies, plan rules, named locations, and auth strength policies in parallel
+  const [{ raw: livePolicies, agentDetailsUnavailable }, { raw: planRules, plansUnavailable }, namedLocations, authStrengthMap] = await Promise.all([
     fetchPolicies(token),
+    fetchPlanRules(token),
     fetchNamedLocations(token),
     // Re-throw 403 (ConsentBanner); other failures degrade to an empty map,
     // which makes custom auth strengths unsatisfiable in simulations
@@ -734,6 +767,9 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
       return new Map<string, number>();
     }),
   ]);
+
+  // Plan rules join before ID extraction, so the names they reference resolve too
+  const rawPolicies = [...livePolicies, ...planRules];
 
   // Extract all referenced GUIDs
   const { directoryObjectIds, appIds, roleTemplateIds } = extractReferencedIds(rawPolicies);
@@ -771,8 +807,8 @@ export async function loadPoliciesFromGraph(token: string): Promise<{
   // Normalize raw Graph data into engine-ready policies
   const policies = normalizePolicies(rawPolicies, directoryObjectNames, appNames, namedLocations);
 
-  return { policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable };
+  return { policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable, plansUnavailable };
 }
 
 // Exported for testing (fixture-based normalization tests)
-export { normalizePolicies };
+export { normalizePolicies, fetchPlanRules };

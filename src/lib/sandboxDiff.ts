@@ -66,7 +66,7 @@ export interface AgentSweepDiff {
 
 export interface SandboxSweepDiff {
   totalScenarios: number;
-  /** Scenarios whose verdict or required controls differ between the sets */
+  /** Scenarios whose verdict, required controls or posture score differ between the sets */
   affectedScenarios: number;
   /** Scenarios going from non-block (live) to block (sandbox) */
   newlyBlocked: number;
@@ -300,9 +300,11 @@ export function compareSweeps(
     liveScoreSum += liveScore;
     sandboxScoreSum += sandboxScore;
 
+    // The score moves on its own when an OR alternative becomes required, or
+    // with sign-in frequency; the required-controls list shows neither
     const verdictChanged = liveResult.finalDecision !== sandboxResult.finalDecision;
     const controlsChanged = !arraysEqual(liveResult.requiredControls, sandboxResult.requiredControls);
-    if (!verdictChanged && !controlsChanged) continue;
+    if (!verdictChanged && !controlsChanged && sandboxScore === liveScore) continue;
 
     affectedScenarios++;
     userTypeAffected[Math.floor(i / scenariosPerUserType)]++;

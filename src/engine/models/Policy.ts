@@ -13,6 +13,8 @@ export interface ConditionalAccessPolicy {
   // Metadata
   createdDateTime?: string;
   modifiedDateTime?: string;
+  /** Set on a rule read from a policy plan (preview). Display and export only — the engine never reads it. */
+  plan?: { id: string; displayName: string };
 }
 
 export interface PolicyConditions {

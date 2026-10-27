@@ -54,7 +54,7 @@ src/
     TourGuide.tsx      # First-run guided tour overlay (data-tour anchors)
     UserSearchInput.tsx     # Reusable user search component
   stores/              # Zustand stores (usePolicyStore, usePersonaStore, useEvaluationStore — activeView includes 'impact')
-  services/            # graphService (policy fetch, tenant app discovery), personaService
+  services/            # graphService (policy fetch, tenant app discovery), policyPlans (plan rules → policies), personaService
   lib/                 # deriveSatisfiedControls, gapAnalysis, gapPersonas, impactAnalysis, sweepDimensions, sandbox, sandboxDiff, sandboxExport, baselineAssessment, analytics, tour
   types/               # TenantApplication (app discovery type)
   data/                # theme.ts (COLORS, APP_VERSION), appBundles (GUID-only bundle registry), baselineChecks (check catalog), templatePolicies (template policy bodies), samplePolicies, samplePersonas
@@ -64,7 +64,7 @@ src/
 ## Key Commands
 
 ```bash
-npm test          # Run all engine tests (845 tests, Vitest)
+npm test          # Run all engine tests (870 tests, Vitest)
 npm run dev       # Start dev server (localhost:5173)
 npm run build     # Production build (Vite)
 ```
@@ -82,6 +82,7 @@ npm run build     # Production build (Vite)
 - **roleTemplateId** for directory roles, NOT instance id
 - **Agent identity isolation** — agent-identity sign-ins match ONLY via `clientApplications.includeAgentIdServicePrincipals` (users condition skipped); agent-targeting policies never apply to user/agent-user sign-ins; `All` and groups never match agent user accounts, only `AllAgentIdUsers` or direct id
 - **Policy list fetches the BETA Graph endpoint** — v1.0 strips agent targeting (verified live); fallback to v1.0 sets `agentDetailsUnavailable`
+- **Policy plan rules are NOT in `/policies`** (verified live) — read from beta `/identity/conditionalAccess/plans` (undocumented; the portal uses it) and flattened into raw policies named "Plan › Rule" BEFORE normalization (`services/policyPlans.ts`). Identities and resources combine as a union with the plan's; a missing users/applications block becomes `['None']`, never empty (empty = everyone). Any plans failure sets `plansUnavailable` and never blocks the load. Rules are state-only in the sandbox and export as portal steps, never a PATCH
 - **Authentication strength is hierarchy-based** — MFA (1) < Passwordless MFA (2) < Phishing-resistant MFA (3); higher tiers satisfy lower requirements. Custom strengths resolve to a tier via `customAuthStrengthMap`; unknown strength IDs are never satisfied. Tier membership mirrors Microsoft's built-in strength table, NOT "is it password-free" — TAP and federated methods use no password but grade MFA-only.
 - **Device compliance and join type are independent** — the "Require Microsoft Entra hybrid joined device" grant control is satisfied by hybrid join ONLY; Entra joined and Entra registered do not satisfy it. Compliance requires an Entra device identity, so unregistered + compliant is an impossible state.
 
@@ -154,11 +155,11 @@ npm run build     # Production build (Vite)
 
 ## Source of Truth
 
-`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-75).
+`docs/project-instructions.md` contains the complete spec: all architectural decisions, data models, evaluation rules, and hard-won lessons (#1-76).
 
 ## Testing
 
-All 845 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, the analytics allowlist, the analytics relay, and the Graph client's token destination. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport, relay upstream, Graph), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
+All 870 tests are in `src/engine/__tests__/`, `src/lib/__tests__/`, `src/services/__tests__/`, `src/stores/__tests__/`, and `src/data/__tests__/`. Test fixtures are in `__tests__/fixtures/`. Each condition matcher has its own test file, plus tests for the policy evaluator, grant resolver, session aggregator, authentication strength hierarchy, full engine integration, gap analysis, impact analysis, persona-aware baseline assessment, the analytics allowlist, the analytics relay, the Graph client's token destination, and policy plan flattening. Tests use real policy structures and contexts — the engine is never mocked. Mocks exist only at I/O boundaries: `fetch` (analytics transport, relay upstream, Graph), `services/auth` and `services/personaService` (both read `window` at import time). Run `npm test` before committing.
 
 ## Impact Analysis Engine
 

@@ -17,6 +17,26 @@ interface ReleaseVersion {
 
 const RELEASES: ReleaseVersion[] = [
   {
+    version: 'v0.6.41',
+    subtitle: 'Refinements',
+    features: [
+      {
+        heading: 'Refinements',
+        body: 'The user card in Simulation Context names each directory role the selected account holds.',
+      },
+    ],
+  },
+  {
+    version: 'v0.6.40',
+    subtitle: 'Policy plans (preview)',
+    features: [
+      {
+        heading: 'Policy Plans (Preview)',
+        body: "The simulator reads policy plans, a preview in Entra Conditional Access. Each rule is combined with its plan's shared identities, resources and conditions, and evaluated like any other policy. Plans have their own sections in the Grid. In the sandbox a rule's state can change; the change plan lists it as a step in the Entra admin center.",
+      },
+    ],
+  },
+  {
     version: 'v0.6.38',
     subtitle: 'Maintenance',
     features: [

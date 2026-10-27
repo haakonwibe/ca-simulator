@@ -32,6 +32,8 @@ interface PolicyStoreState {
   dataSource: 'none' | 'live' | 'sample';
   /** Beta policy endpoint unavailable — agent targeting invisible in loaded policies */
   agentDetailsUnavailable: boolean;
+  /** Policy plans (preview) could not be read — their rules are not in the loaded policies */
+  plansUnavailable: boolean;
 
   // Sandbox: hypothetical policy overrides (state + assignments), applied on
   // top of live policies. effectivePolicies is what every consumer reads —
@@ -93,6 +95,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
   error: null,
   dataSource: 'none',
   agentDetailsUnavailable: false,
+  plansUnavailable: false,
   sandboxActive: false,
   sandboxOverrides: {},
   sandboxAssignments: {},
@@ -117,7 +120,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
     set({ isLoading: true, error: null });
     try {
       const token = await getAccessToken();
-      const [{ policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable }, tenantName] = await Promise.all([
+      const [{ policies, namedLocations, displayNames, authStrengthMap, tenantApplications, agentDetailsUnavailable, plansUnavailable }, tenantName] = await Promise.all([
         loadPoliciesFromGraph(token),
         fetchTenantName(token),
       ]);
@@ -146,6 +149,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
         isLoading: false,
         dataSource: 'live',
         agentDetailsUnavailable: agentDetailsUnavailable ?? false,
+        plansUnavailable: plansUnavailable ?? false,
         sandboxActive,
         sandboxOverrides,
         sandboxAssignments,
@@ -199,6 +203,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       error: null,
       dataSource: 'sample',
       agentDetailsUnavailable: false,
+      plansUnavailable: false,
       sandboxActive,
       sandboxOverrides,
       sandboxAssignments,
@@ -220,6 +225,7 @@ export const usePolicyStore = create<PolicyStoreState>((set, get) => ({
       isLoading: false,
       error: null,
       dataSource: 'none',
+      plansUnavailable: false,
       sandboxActive: false,
       sandboxOverrides: {},
       sandboxAssignments: {},

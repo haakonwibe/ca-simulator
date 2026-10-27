@@ -105,6 +105,20 @@ export function LimitationsDialog({
           <Section title="Other notes">
             <ul className="space-y-2 mt-1">
               <LimitationItem>
+                <strong>Sign-in logs</strong> — The simulator works from policy configuration and
+                does not read sign-in logs. Entra does not apply Conditional Access to Windows
+                sign-in itself, or to some sign-ins that register a device or check its
+                compliance, so the Coverage tab in the Entra admin center lists Windows Sign In as
+                not covered. App sign-ins that follow are evaluated as usual.
+              </LimitationItem>
+              <LimitationItem>
+                <strong>Policy plans (preview)</strong> — Rules in policy plans are read from a
+                preview Graph endpoint that Microsoft has not documented yet. Each rule is combined
+                with its plan's shared settings, as the Entra admin center does. In the sandbox a
+                rule's state can change but not its assignments, and the change plan lists rule
+                changes as steps in the admin center.
+              </LimitationItem>
+              <LimitationItem>
                 <strong>Authentication Context</strong> — Static C1/C2/C3 options in the
                 simulator. Live tenants do not yet fetch tenant-defined authentication contexts
                 from Graph API.

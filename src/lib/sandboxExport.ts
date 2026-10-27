@@ -16,6 +16,7 @@ import {
   type SandboxAssignments,
 } from './sandbox';
 import { describeSandboxChanges, type SandboxChange } from './sandboxDiff';
+import { PLAN_RULE_SEPARATOR, planRuleName } from '@/services/policyPlans';
 
 // ── Types ───────────────────────────────────────────────────────────
 
@@ -30,6 +31,8 @@ export interface PolicyModification {
   patchBody: Record<string, unknown>;
   /** Agent-bearing policies must PATCH via beta — v1.0 silently strips agent targeting */
   requiresBetaEndpoint: boolean;
+  /** Set for a policy plan rule: no Graph write API is published for plans, so the change is a portal step */
+  portalPath?: string;
 }
 
 export interface PolicyCreation {
@@ -206,6 +209,9 @@ function buildSummaryMarkdown(
         if (fc.removed.length > 0) parts.push(`removed ${fc.removed.join(', ')}`);
         lines.push(`- ${fc.fieldLabel}: ${parts.join('; ')}`);
       }
+      if (mod.portalPath) {
+        lines.push(`- Change in the Entra admin center: ${mod.portalPath} (no Graph write API is published for policy plans)`);
+      }
       lines.push('');
     }
   }
@@ -251,6 +257,14 @@ function buildPowershellScript(
       if (fc.added.length > 0) parts.push(`added ${fc.added.join(', ')}`);
       if (fc.removed.length > 0) parts.push(`removed ${fc.removed.join(', ')}`);
       lines.push(`#    ${fc.fieldLabel}: ${parts.join('; ')}`);
+    }
+    if (mod.portalPath) {
+      lines.push(
+        '#    Policy plan rule: no Graph write API is published for policy plans. Change it in the Entra admin center:',
+        `#    ${mod.portalPath}`,
+        '',
+      );
+      continue;
     }
     if (mod.requiresBetaEndpoint) {
       lines.push('#    Uses the beta endpoint: this policy carries agent targeting, which v1.0 writes would strip.');
@@ -319,12 +333,17 @@ export function buildChangePlan(
       const requiresBetaEndpoint =
         effectivePolicy.conditions.clientApplications !== undefined ||
         (effectivePolicy.conditions.agentIdRiskLevels?.length ?? 0) > 0;
+      const plan = effectivePolicy.plan;
+      const portalPath = plan
+        ? ['Conditional Access', 'Policy plans', plan.displayName, planRuleName(effectivePolicy)].join(PLAN_RULE_SEPARATOR)
+        : undefined;
       modifications.push({
         policyId: change.policyId,
         policyName: change.policyName,
         change,
         patchBody: toGraphPatchBody(change, effectivePolicy),
         requiresBetaEndpoint,
+        ...(portalPath ? { portalPath } : {}),
       });
     }
   }
@@ -332,12 +351,22 @@ export function buildChangePlan(
   const jsonDocument = JSON.stringify(
     {
       generatedBy: 'CA Simulator sandbox export',
-      modifications: modifications.map((m) => ({
-        policyId: m.policyId,
-        displayName: m.policyName,
-        apiVersion: m.requiresBetaEndpoint ? 'beta' : 'v1.0',
-        patch: m.patchBody,
-      })),
+      modifications: modifications.map((m) =>
+        m.portalPath
+          ? {
+              policyId: m.policyId,
+              displayName: m.policyName,
+              portalOnly: true,
+              portalPath: m.portalPath,
+              ...(m.change.stateChange ? { state: m.change.stateChange.to } : {}),
+            }
+          : {
+              policyId: m.policyId,
+              displayName: m.policyName,
+              apiVersion: m.requiresBetaEndpoint ? 'beta' : 'v1.0',
+              patch: m.patchBody,
+            },
+      ),
       creations: creations.map((c) => c.policyBody),
     },
     null,

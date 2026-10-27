@@ -489,3 +489,16 @@ describe('superseded loads', () => {
     expect(usePolicyStore.getState().tenantName).toBeNull();
   });
 });
+
+describe('policy plans', () => {
+  it('records that plans could not be read while the policies still load; clear() resets it', async () => {
+    loadPoliciesFromGraphMock.mockResolvedValue({ ...graphResult([createPolicy()]), plansUnavailable: true });
+    await usePolicyStore.getState().loadFromGraph();
+
+    expect(usePolicyStore.getState().plansUnavailable).toBe(true);
+    expect(usePolicyStore.getState().policies).toHaveLength(1);
+
+    usePolicyStore.getState().clear();
+    expect(usePolicyStore.getState().plansUnavailable).toBe(false);
+  });
+});

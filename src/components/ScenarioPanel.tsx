@@ -196,6 +196,8 @@ export function ScenarioPanel() {
   const authStrengthMap = usePolicyStore((s) => s.authStrengthMap);
   const displayNames = usePolicyStore((s) => s.displayNames);
   const agentDetailsUnavailable = usePolicyStore((s) => s.agentDetailsUnavailable);
+  const plansUnavailable = usePolicyStore((s) => s.plansUnavailable);
+  const planRuleCount = policies.filter((p) => p.plan).length;
   const resolvedPersonas = usePersonaStore((s) => s.resolvedPersonas);
   const selectedPersonaId = usePersonaStore((s) => s.selectedPersonaId);
   const isResolving = usePersonaStore((s) => s.isResolving);
@@ -572,7 +574,9 @@ export function ScenarioPanel() {
                 </Badge>
               ) : (
                 <Badge variant="secondary" className="text-xs font-normal">
-                  {policies.length} policies loaded
+                  {planRuleCount > 0
+                    ? `${policies.length - planRuleCount} policies · ${planRuleCount} plan ${planRuleCount === 1 ? 'rule' : 'rules'}`
+                    : `${policies.length} policies loaded`}
                 </Badge>
               )}
               <Button
@@ -592,6 +596,12 @@ export function ScenarioPanel() {
             <p className="mt-1.5 text-[10px] leading-tight" style={{ color: COLORS.warning }}>
               Agent policy details unavailable (beta endpoint unreachable) — agent
               targeting is not visible in these policies.
+            </p>
+          )}
+          {plansUnavailable && policies.length > 0 && (
+            <p className="mt-1.5 text-[10px] leading-tight" style={{ color: COLORS.warning }}>
+              Policy plans (preview) could not be read — rules in plans are not
+              included.
             </p>
           )}
         </div>
@@ -767,7 +777,11 @@ export function ScenarioPanel() {
               </div>
               <div className="mt-1 flex flex-wrap gap-x-3 gap-y-0.5 text-[10px] text-muted-foreground">
                 <span>{selectedPersona.memberOfGroupIds.length} groups</span>
-                <PersonaRoles roleIds={selectedPersona.directoryRoleIds} displayNames={displayNames} />
+                <PersonaRoles
+                  roleIds={selectedPersona.directoryRoleIds}
+                  roleNames={selectedPersona.directoryRoleNames}
+                  displayNames={displayNames}
+                />
               </div>
             </div>
           )}
@@ -1193,15 +1207,20 @@ export function ScenarioPanel() {
  */
 function PersonaRoles({
   roleIds,
+  roleNames,
   displayNames,
 }: {
   roleIds: string[];
+  /** Names read with the account's memberships; sample personas have none */
+  roleNames?: Record<string, string>;
   displayNames: Map<string, string>;
 }) {
   if (roleIds.length === 0) {
     return <span>No directory roles</span>;
   }
-  const names = roleIds.map((id) => displayNames.get(id)).filter((n): n is string => Boolean(n));
+  const names = roleIds
+    .map((id) => roleNames?.[id] ?? displayNames.get(id))
+    .filter((n): n is string => Boolean(n));
   if (names.length === 0) {
     return <span>{roleIds.length} roles</span>;
   }

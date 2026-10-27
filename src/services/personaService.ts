@@ -69,6 +69,9 @@ export async function resolveUserContext(token: string, userId: string): Promise
   // Separate groups and directory roles
   const groupIds: string[] = [];
   const roleTemplateIds: string[] = [];
+  // Names come with the membership, so any role can be named, not only the
+  // ones a policy references
+  const roleNames: Record<string, string> = {};
 
   for (const obj of memberships) {
     const odataType = obj['@odata.type'] ?? '';
@@ -81,6 +84,7 @@ export async function resolveUserContext(token: string, userId: string): Promise
       // Policies reference roleTemplateId — the stable template GUID.
       if (obj.roleTemplateId) {
         roleTemplateIds.push(obj.roleTemplateId);
+        if (obj.displayName) roleNames[obj.roleTemplateId] = obj.displayName;
       } else {
         console.warn('[PersonaService] directoryRole missing roleTemplateId — skipping');
       }
@@ -101,6 +105,7 @@ export async function resolveUserContext(token: string, userId: string): Promise
     userType: isGuest ? 'guest' : 'member',
     memberOfGroupIds: groupIds,
     directoryRoleIds: roleTemplateIds,
+    directoryRoleNames: roleNames,
     guestOrExternalUserTypes: isGuest ? ['b2bCollaborationGuest'] : undefined,
     homeTenantId: undefined,
   };

@@ -335,6 +335,42 @@ describe('compareSweeps', () => {
     expect(diff.postureAfter).toBe(100);
   });
 
+  it('an OR alternative that becomes required counts as strengthened', () => {
+    // MFA is already one option, so the required-controls list stays the same;
+    // only the score shows that the weaker option is gone
+    const mfaOrAppProtection = createPolicy({
+      id: 'mfa-or-app',
+      displayName: 'MFA or app protection',
+      grantControls: { operator: 'OR', builtInControls: ['mfa', 'compliantApplication'] },
+    });
+    const live = [mfaOrAppProtection, mfaForAll('disabled')];
+    const sandbox = applySandboxOverrides(live, { 'mfa-all': 'enabled' });
+    const diff = compareSweeps(live, sandbox);
+
+    expect(diff.postureAfter).toBeGreaterThan(diff.postureBefore);
+    expect(diff.strengthened).toBeGreaterThan(0);
+    expect(diff.affectedScenarios).toBe(diff.strengthened);
+    expect(diff.weakened).toBe(0);
+  });
+
+  it('a sign-in frequency change counts, persistent browser alone does not', () => {
+    const live = [mfaForAll()];
+    const withFrequency = [
+      { ...mfaForAll(), sessionControls: { signInFrequency: { isEnabled: true, value: 4, type: 'hours' as const, frequencyInterval: 'timeBased' } } },
+    ];
+    const withPersistentBrowser = [
+      { ...mfaForAll(), sessionControls: { persistentBrowser: { isEnabled: true, mode: 'never' as const } } },
+    ];
+
+    const frequency = compareSweeps(live, withFrequency);
+    expect(frequency.strengthened).toBeGreaterThan(0);
+    expect(frequency.affectedScenarios).toBe(frequency.strengthened);
+
+    const browser = compareSweeps(live, withPersistentBrowser);
+    expect(browser.affectedScenarios).toBe(0);
+    expect(browser.postureAfter).toBe(browser.postureBefore);
+  });
+
   it('disabling a non-matching policy affects nothing', () => {
     const guestOnly = createPolicy({
       id: 'never-matches',

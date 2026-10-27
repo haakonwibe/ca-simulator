@@ -1,12 +1,13 @@
 // components/PolicyGraph.tsx — Interactive policy grid visualization.
 
-import { useMemo } from 'react';
+import { useMemo, useState } from 'react';
 import { usePolicyStore } from '@/stores/usePolicyStore';
 import { useEvaluationStore } from '@/stores/useEvaluationStore';
 import { COLORS, CATEGORY_META } from '@/data/theme';
 import type { ConditionalAccessPolicy } from '@/engine/models/Policy';
 import type { PolicyEvaluationResult } from '@/engine/models/EvaluationResult';
 import { SandboxStateControl } from '@/components/SandboxStateControl';
+import { Switch } from '@/components/ui/switch';
 import {
   CheckCircle2,
   AlertTriangle,
@@ -14,6 +15,7 @@ import {
   Eye,
   Zap,
   Beaker,
+  Layers,
 } from 'lucide-react';
 import {
   Tooltip,
@@ -22,6 +24,11 @@ import {
   TooltipProvider,
 } from '@/components/ui/tooltip';
 import { inferCategory } from '@/components/matrix/matrixUtils';
+import { planRuleName } from '@/services/policyPlans';
+
+const GRID_STYLE = {
+  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+} as const;
 
 // ── Tile evaluation state ───────────────────────────────────────────
 
@@ -179,6 +186,27 @@ export function PolicyGraph() {
     return map;
   }, [result]);
 
+  // Display only: hidden plan rules are still evaluated everywhere else
+  const [showPlans, setShowPlans] = useState(true);
+
+  // One section per policy plan (preview), then the standalone policies.
+  // A rule looks like any other policy on its own, so the plan heading is
+  // what tells them apart.
+  const { standalone, plans } = useMemo(() => {
+    const standalone: ConditionalAccessPolicy[] = [];
+    const plans = new Map<string, { displayName: string; rules: ConditionalAccessPolicy[] }>();
+    for (const policy of policies) {
+      if (!policy.plan) {
+        standalone.push(policy);
+        continue;
+      }
+      const group = plans.get(policy.plan.id) ?? { displayName: policy.plan.displayName, rules: [] };
+      group.rules.push(policy);
+      plans.set(policy.plan.id, group);
+    }
+    return { standalone, plans: [...plans.entries()] };
+  }, [policies]);
+
   if (policies.length === 0) {
     return <EmptyState isLoading={isLoading} />;
   }
@@ -189,54 +217,95 @@ export function PolicyGraph() {
   const reportOnlyCount = policies.filter(
     (p) => p.state === 'enabledForReportingButNotEnforced',
   ).length;
+  const ruleCount = policies.length - standalone.length;
+  const plansShown = showPlans && plans.length > 0;
+
+  // Running index across sections keeps the evaluation stagger in order
+  let tileIndex = 0;
+  const renderTile = (policy: ConditionalAccessPolicy) => {
+    const category = inferCategory(policy);
+    const evalEntry = evalMap?.get(policy.id);
+    const tileState: TileState = evalEntry?.state ?? (
+      policy.state === 'disabled' ? 'disabled' : 'default'
+    );
+
+    return (
+      <PolicyTile
+        key={policy.id}
+        policy={policy}
+        label={planRuleName(policy)}
+        category={category}
+        tileState={tileState}
+        evalResult={evalEntry?.evalResult}
+        isSelected={selectedPolicyId === policy.id}
+        onClick={() => setSelectedPolicyId(selectedPolicyId === policy.id ? null : policy.id)}
+        index={tileIndex++}
+        hasEvaluation={!!result}
+        sandboxActive={sandboxActive}
+        isModified={policy.id in sandboxOverrides || policy.id in sandboxAssignments}
+        isDraft={policy.id in sandboxDrafts}
+        onStateChange={(state) => setSandboxOverride(policy.id, state)}
+      />
+    );
+  };
 
   return (
     <div className="flex h-full flex-col overflow-hidden">
       {/* Stats bar */}
       <div className="flex shrink-0 items-center gap-2 border-b border-border px-4 py-2">
         <span className="text-xs text-muted-foreground">
-          <span className="font-medium text-foreground">{policies.length}</span> policies
+          <span className="font-medium text-foreground">{standalone.length}</span> policies
+          {ruleCount > 0 && (
+            <>
+              {' '}&middot; <span className="font-medium text-foreground">{ruleCount}</span> plan{' '}
+              {ruleCount === 1 ? 'rule' : 'rules'}
+            </>
+          )}
         </span>
         <span className="text-[10px] text-muted-foreground">
           {enabledCount} enabled &middot; {disabledCount} disabled &middot; {reportOnlyCount} report-only
         </span>
+        {plans.length > 0 && (
+          <div
+            className="ml-auto flex items-center gap-1.5"
+            title="Hiding plans changes this view only. Their rules are still evaluated."
+          >
+            <Switch
+              id="show-plans"
+              checked={showPlans}
+              onCheckedChange={setShowPlans}
+              className="h-4 w-7 [&>span]:h-3 [&>span]:w-3 data-[state=checked]:[&>span]:translate-x-3"
+            />
+            <label htmlFor="show-plans" className="cursor-pointer text-[10px] text-muted-foreground">
+              Show plans
+            </label>
+          </div>
+        )}
       </div>
 
       {/* Grid area */}
       <TooltipProvider delayDuration={300}>
         <div className="flex-1 overflow-y-auto p-4">
-          <div
-            className="mx-auto grid gap-3"
-            style={{
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              maxWidth: '900px',
-            }}
-          >
-            {policies.map((policy, index) => {
-              const category = inferCategory(policy);
-              const evalEntry = evalMap?.get(policy.id);
-              const tileState: TileState = evalEntry?.state ?? (
-                policy.state === 'disabled' ? 'disabled' : 'default'
-              );
-
-              return (
-                <PolicyTile
-                  key={policy.id}
-                  policy={policy}
-                  category={category}
-                  tileState={tileState}
-                  evalResult={evalEntry?.evalResult}
-                  isSelected={selectedPolicyId === policy.id}
-                  onClick={() => setSelectedPolicyId(selectedPolicyId === policy.id ? null : policy.id)}
-                  index={index}
-                  hasEvaluation={!!result}
-                  sandboxActive={sandboxActive}
-                  isModified={policy.id in sandboxOverrides || policy.id in sandboxAssignments}
-                  isDraft={policy.id in sandboxDrafts}
-                  onStateChange={(state) => setSandboxOverride(policy.id, state)}
+          <div className="mx-auto" style={{ maxWidth: '900px' }}>
+            {plansShown && plans.map(([planId, plan]) => (
+              <section key={planId} className="mb-6">
+                <SectionHeading
+                  icon
+                  title={plan.displayName}
+                  detail={`Policy plan (preview) · ${plan.rules.length} ${plan.rules.length === 1 ? 'rule' : 'rules'}`}
                 />
-              );
-            })}
+                <div className="grid gap-3" style={GRID_STYLE}>
+                  {plan.rules.map(renderTile)}
+                </div>
+              </section>
+            ))}
+
+            {plansShown && standalone.length > 0 && (
+              <SectionHeading title="Policies" detail={`${standalone.length}`} />
+            )}
+            <div className="grid gap-3" style={GRID_STYLE}>
+              {standalone.map(renderTile)}
+            </div>
           </div>
         </div>
       </TooltipProvider>
@@ -251,6 +320,7 @@ export function PolicyGraph() {
 
 function PolicyTile({
   policy,
+  label,
   category,
   tileState,
   evalResult,
@@ -264,6 +334,8 @@ function PolicyTile({
   onStateChange,
 }: {
   policy: ConditionalAccessPolicy;
+  /** Name on the tile — a plan rule's own name under its plan heading; the tooltip keeps the full name */
+  label: string;
   category: string;
   tileState: TileState;
   evalResult?: PolicyEvaluationResult;
@@ -387,7 +459,7 @@ function PolicyTile({
                   textDecoration: tileState === 'disabled' ? 'line-through' : undefined,
                 }}
               >
-                {policy.displayName}
+                {label}
               </span>
             </div>
 
@@ -437,6 +509,18 @@ function PolicyTile({
           <SandboxStateControl value={policy.state} onChange={onStateChange} />
         </div>
       )}
+    </div>
+  );
+}
+
+// ── Section heading ─────────────────────────────────────────────────
+
+function SectionHeading({ title, detail, icon = false }: { title: string; detail: string; icon?: boolean }) {
+  return (
+    <div className="mb-2 flex items-center gap-2 border-b border-border pb-1.5">
+      {icon && <Layers className="h-3.5 w-3.5 shrink-0" style={{ color: COLORS.textMuted }} />}
+      <span className="text-xs font-medium text-foreground">{title}</span>
+      <span className="text-[10px] text-muted-foreground">{detail}</span>
     </div>
   );
 }

@@ -40,6 +40,8 @@ export interface UserContext {
   memberOfGroupIds: string[];
   /** Role template IDs assigned to the user */
   directoryRoleIds: string[];
+  /** Role names by template ID, as read with the user's memberships. Display only — the engine never reads it. */
+  directoryRoleNames?: Record<string, string>;
   /** Home tenant ID for external users */
   homeTenantId?: string;
 }
